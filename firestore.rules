@@ -1,0 +1,222 @@
+// HELIOS - FIRESTORE SECURITY RULES
+//
+// HOW TO APPLY:
+// 1. Go to Firebase Console -> Firestore Database -> Rules tab
+// 2. Delete everything in the editor
+// 3. Copy everything below the dashed line and paste it
+// 4. Click Publish
+//
+// -----------------------------------------------------------------------
+// PASTE BELOW THIS LINE INTO FIRESTORE RULES EDITOR:
+// -----------------------------------------------------------------------
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -- Helper functions --
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    function userId() {
+      return request.auth.uid;
+    }
+
+    function isCardMember(cardId) {
+      return isAuthed() &&
+        exists(/databases/$(database)/documents/cards/$(cardId)/members/$(userId()));
+    }
+
+    function getMember(cardId) {
+      return get(/databases/$(database)/documents/cards/$(cardId)/members/$(userId())).data;
+    }
+
+    function isCardAdmin(cardId) {
+      return isCardMember(cardId) &&
+        (getMember(cardId).role == 'OWNER' || getMember(cardId).isAdmin == true);
+    }
+
+    function isMedic(cardId) {
+      return isCardMember(cardId) &&
+        (getMember(cardId).canTreatOthers == true || isCardAdmin(cardId));
+    }
+
+    // The single privileged owner/operator identity — same account used to
+    // log into the main app and the separate admin key-generator app.
+    // Case-insensitive since usernames are stored with their original casing.
+    function isOwnerAdmin() {
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(userId())).data.username.lower() == 'sidious';
+    }
+
+    // -- Users --
+    // Each user can read/write their own profile
+    match /users/{userId} {
+      allow read:  if isAuthed();
+      allow write: if isAuthed() && request.auth.uid == userId;
+    }
+
+    // -- Invite codes (cards) --
+    // A separate top-level collection, keyed by the code itself, so joining
+    // a card is an exact-ID get (never a list/query across cards).
+    // list: false means no one can enumerate other factions' codes - only
+    // someone who already has the exact 6-character code can resolve it.
+    match /inviteCodes/{code} {
+      allow get:  if isAuthed();
+      allow list: if false;
+      allow create: if isAuthed() &&
+        exists(/databases/$(database)/documents/cards/$(request.resource.data.cardId)/members/$(userId()));
+      allow delete: if isAuthed() &&
+        exists(/databases/$(database)/documents/cards/$(resource.data.cardId)/members/$(userId()));
+      allow update: if false; // regenerating a code deletes the old doc and creates a new one
+    }
+
+    // -- License keys --
+    // Doc ID is the key code itself. Only Sidious (via the admin app) can
+    // generate/list/delete keys — regular users can only look up ONE exact
+    // code (needed to check/activate it), never browse all of them.
+    match /licenseKeys/{code} {
+      allow get:  if isAuthed();
+      allow list: if isOwnerAdmin();
+      allow create: if isOwnerAdmin();
+      allow delete: if isOwnerAdmin();
+      // A regular user may "spend" a key exactly once — flipping
+      // activated false -> true — but cannot touch tier/duration/price,
+      // and cannot flip it back or re-activate an already-used key.
+      allow update: if isOwnerAdmin() ||
+        ( isAuthed() &&
+          resource.data.activated == false &&
+          request.resource.data.activated == true &&
+          request.resource.data.tier == resource.data.tier &&
+          request.resource.data.durationDays == resource.data.durationDays &&
+          request.resource.data.priceUSD == resource.data.priceUSD
+        );
+    }
+
+    // -- Cards (faction workspaces) --
+    match /cards/{cardId} {
+      allow read:  if isCardMember(cardId);
+      // Sidious can always create a card. Everyone else must reference a
+      // real, not-yet-activated license key in the same write — the app
+      // activates that key in the same transaction that creates this doc.
+      allow create: if isOwnerAdmin() ||
+        ( isAuthed() &&
+          exists(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)) &&
+          get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.activated == false
+        );
+      // Renewing an existing card's license also goes through here, and is
+      // already correctly restricted to that card's Owner/Admins.
+      allow update: if isCardAdmin(cardId);
+      allow delete: if isAuthed() &&
+        get(/databases/$(database)/documents/cards/$(cardId)).data.ownerId == userId();
+
+      // -- Members --
+      match /members/{memberId} {
+        // Members can read the whole roster; anyone can read their OWN
+        // prospective member doc (needed for the "am I already a member?"
+        // check that runs before joinCard creates that doc).
+        allow read:   if isCardMember(cardId) || memberId == userId();
+        allow create: if isAuthed() && memberId == userId(); // join yourself
+        allow update: if isCardAdmin(cardId) || memberId == userId(); // admin or self
+        allow delete: if isCardAdmin(cardId) || memberId == userId(); // admin or self-leave
+      }
+
+      // -- Roles --
+      match /roles/{roleId} {
+        allow read:   if isCardMember(cardId);
+        allow write:  if isCardAdmin(cardId);
+      }
+
+      // -- Channels --
+      match /channels/{chanId} {
+        allow read:   if isCardMember(cardId);
+        allow write:  if isCardAdmin(cardId);
+      }
+
+      // -- Operations --
+      match /operations/{opId} {
+        allow read:   if isCardMember(cardId);
+        // Only members with canCreateOps permission (or admin) can write
+        allow write:  if isCardAdmin(cardId) ||
+          (isCardMember(cardId) && getMember(cardId).canCreateOps == true);
+      }
+
+      // -- Brevity codes --
+      match /brevity/{codeId} {
+        allow read:   if isCardMember(cardId);
+        allow write:  if isCardAdmin(cardId) ||
+          (isCardMember(cardId) && getMember(cardId).canEditBrevity == true);
+      }
+
+      // -- Units (ORBAT) --
+      // NOTE: this collection had no rules at all before - under Firestore's
+      // default-deny behavior that meant unit creation was silently rejected
+      // for every user, regardless of role.
+      match /units/{unitId} {
+        allow read:   if isCardMember(cardId);
+        allow write:  if isCardAdmin(cardId);
+      }
+    }
+
+    // -- Medical records --
+    // cardId scoped - each card has its own medical board
+    match /medical/{cardId}/patients/{patientId} {
+      // Any card member can read medical data
+      allow read: if isCardMember(cardId);
+
+      // Players can update their OWN medical record
+      allow write: if isCardMember(cardId) && patientId == userId();
+
+      // Medics can update ANY patient's record in their card
+      allow write: if isMedic(cardId);
+    }
+
+    // -- Joint Ops (cross-faction coordination) --
+    // Joint ops are inherently a shared surface between multiple, otherwise
+    // unrelated factions - there's no single "card" whose membership rules
+    // can gate access the way the per-card collections above do. Any
+    // authenticated user can read/write here; the sensitive per-faction data
+    // (roster, roles, medical, brevity) stays fully gated above regardless.
+    match /jointOpCodes/{code} {
+      allow get:  if isAuthed();
+      allow list: if false;
+      allow create: if isAuthed();
+      allow delete: if isAuthed();
+      allow update: if false;
+    }
+
+    match /jointOps/{joId} {
+      allow read:   if isAuthed();
+      allow create: if isAuthed();
+      allow update: if isAuthed();
+      allow delete: if false;
+
+      match /participants/{cardId} {
+        allow read:  if isAuthed();
+        allow write: if isAuthed();
+      }
+      match /casualties/{uid} {
+        allow read:  if isAuthed();
+        allow write: if isAuthed() && uid == userId();
+      }
+    }
+
+    // -- WebRTC Signaling (voice) --
+    // NOTE: voice.js actually signals over the Realtime Database, not
+    // Firestore - these Firestore rules for /rtc are never consulted. The
+    // rules that really govern voice are the Realtime Database rules from
+    // README.md Step 1E (rtc/$cardId -> auth != null). Left here in case a
+    // future version moves signaling into Firestore.
+    match /rtc/{cardId}/channels/{chanId}/peers/{peerId} {
+      allow read:  if isCardMember(cardId);
+      allow write: if isCardMember(cardId);
+    }
+
+    match /rtc/{cardId}/channels/{chanId}/signals/{signalId} {
+      allow read:  if isCardMember(cardId);
+      allow write: if isCardMember(cardId);
+      allow delete: if isCardMember(cardId);
+    }
+  }
+}

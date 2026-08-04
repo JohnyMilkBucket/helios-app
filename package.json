@@ -1,0 +1,54 @@
+{
+  "name": "helios",
+  "version": "1.0.0",
+  "description": "Helios Tactical Overlay",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "release": "electron-builder --win --x64 --publish always"
+  },
+  "build": {
+    "appId": "com.helios.overlay",
+    "productName": "Helios",
+    "files": [
+      "main.js",
+      "preload.js",
+      "firebase.config.js",
+      "renderer/**/*"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "JohnyMilkBucket",
+      "repo": "helios-app"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "renderer/assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "renderer/assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  },
+  "keywords": [],
+  "author": "JSOC-FWD",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "firebase": "^10.12.0"
+  }
+}

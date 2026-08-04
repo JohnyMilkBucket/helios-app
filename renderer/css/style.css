@@ -1,0 +1,460 @@
+/* renderer/css/style.css */
+/* Helios Tactical Overlay — Transparent Background */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── TRANSPARENT OVERLAY ──────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  width: 100%;
+  /* TRANSPARENT — game shows through here */
+  background: transparent !important;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', monospace;
+  color: #e8eef5;
+  user-select: none;
+}
+
+/* Panels are semi-transparent so game is visible through them */
+:root {
+  --bg-panel:    rgba(12, 22, 42, 0.82);
+  --bg-deep:     rgba(6,  14, 28, 0.90);
+  --bg-overlay:  rgba(8,  18, 34, 0.55);
+  --border:      rgba(91, 139, 181, 0.25);
+  --accent:      #5b8bb5;
+  --accent-hi:   #8db3d4;
+  --green:       #4ade80;
+  --red:         #ef4444;
+  --red-soft:    #fca5a5;
+  --amber:       #fbbf24;
+  --purple:      #a78bfa;
+  --blue-soft:   #60a5fa;
+}
+
+/* ── LAYOUT ───────────────────────────────────────────────────────────────── */
+#app {
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* ── TITLEBAR / DRAG REGION ──────────────────────────────────────────────── */
+#titlebar {
+  height: 32px;
+  background: rgba(8, 16, 30, 0.88);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  flex-shrink: 0;
+  /* This region is draggable */
+  -webkit-app-region: drag;
+}
+
+#titlebar .title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: #fff;
+}
+
+#titlebar .subtitle {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  margin-left: 10px;
+}
+
+/* Window control buttons must be no-drag so clicks work */
+#win-controls {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+#win-controls button {
+  width: 24px;
+  height: 20px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--accent-hi);
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+#win-controls button:hover { background: rgba(91, 139, 181, 0.15); }
+#win-controls .close-btn:hover { background: rgba(239, 68, 68, 0.3); color: #fff; }
+
+/* Opacity slider */
+#opacity-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 12px;
+  -webkit-app-region: no-drag;
+}
+#opacity-control input[type=range] {
+  width: 60px;
+  height: 3px;
+  -webkit-app-region: no-drag;
+}
+
+/* ── MAIN BODY ────────────────────────────────────────────────────────────── */
+#body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ── SIDEBARS ─────────────────────────────────────────────────────────────── */
+#sidebar-left {
+  width: 256px;
+  min-width: 256px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+}
+
+#sidebar-right {
+  width: 210px;
+  min-width: 210px;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── MAIN CONTENT ─────────────────────────────────────────────────────────── */
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(8px);
+}
+
+/* ── SCROLLBARS ───────────────────────────────────────────────────────────── */
+.scroll { overflow-y: auto; }
+.scroll::-webkit-scrollbar { width: 4px; }
+.scroll::-webkit-scrollbar-track { background: rgba(13, 26, 46, 0.4); }
+.scroll::-webkit-scrollbar-thumb { background: rgba(91, 139, 181, 0.4); }
+
+/* ── TABS ─────────────────────────────────────────────────────────────────── */
+#tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 20, 38, 0.5);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+#tabs::-webkit-scrollbar { height: 0; }
+
+#tabs button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--accent-hi);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: 'Orbitron', sans-serif;
+  -webkit-app-region: no-drag;
+  transition: color 0.12s;
+}
+#tabs button.active { border-bottom-color: var(--accent-hi); color: #fff; }
+#tabs button:hover:not(.active) { color: #cdd9e8; }
+
+/* ── PANELS ───────────────────────────────────────────────────────────────── */
+.panel {
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  backdrop-filter: blur(10px);
+}
+
+/* ── CONTENT AREA ─────────────────────────────────────────────────────────── */
+#content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  position: relative;
+}
+#content::-webkit-scrollbar { width: 4px; }
+#content::-webkit-scrollbar-thumb { background: rgba(91, 139, 181, 0.4); }
+
+/* Tab panels */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── BUTTONS ──────────────────────────────────────────────────────────────── */
+.btn {
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  border: 1px solid var(--border);
+  color: var(--accent-hi);
+  background: none;
+  padding: 5px 12px;
+  transition: background 0.12s;
+  -webkit-app-region: no-drag;
+}
+.btn:hover { background: rgba(91, 139, 181, 0.12); }
+.btn-green { border-color: var(--green); color: var(--green); background: rgba(74, 222, 128, 0.05); }
+.btn-green:hover { background: rgba(74, 222, 128, 0.14); }
+.btn-red { border-color: var(--red); color: var(--red-soft); background: rgba(239, 68, 68, 0.07); }
+.btn-red:hover { background: rgba(239, 68, 68, 0.15); }
+.btn-blue { border-color: var(--accent); color: var(--accent-hi); background: rgba(91, 139, 181, 0.1); }
+.btn-blue:hover { background: rgba(91, 139, 181, 0.2); }
+.btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
+/* ── INPUTS ───────────────────────────────────────────────────────────────── */
+input[type=text], input[type=password], input[type=number], textarea {
+  background: rgba(8, 18, 36, 0.72);
+  border: 1px solid rgba(91, 139, 181, 0.32);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+input[type=text]:focus, input[type=password]:focus, input[type=number]:focus, textarea:focus {
+  border-color: var(--accent-hi);
+}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+/* ── ANIMATIONS ───────────────────────────────────────────────────────────── */
+@keyframes hb {
+  0%,100% { transform: scale(1); }
+  15% { transform: scale(1.22); }
+  30% { transform: scale(1); }
+  45% { transform: scale(1.1); }
+  60% { transform: scale(1); }
+}
+@keyframes ecg { 0% { stroke-dashoffset: 200; } 100% { stroke-dashoffset: 0; } }
+@keyframes drip { 0%,100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(2px); opacity: .55; } }
+@keyframes bpulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes sright { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes fadeup { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── MODAL ────────────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadein 0.15s ease-out;
+}
+.modal-box {
+  width: min(94vw, 440px);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: rgba(10, 20, 38, 0.97);
+  backdrop-filter: blur(20px);
+  border: 2px solid var(--border);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.75);
+  animation: fadeup 0.18s ease-out;
+  font-family: 'JetBrains Mono', monospace;
+  color: #e8eef5;
+}
+.modal-box::-webkit-scrollbar { width: 4px; }
+.modal-box::-webkit-scrollbar-thumb { background: rgba(91, 139, 181, 0.4); }
+
+/* ── PROGRESS BAR ─────────────────────────────────────────────────────────── */
+.prog-track {
+  height: 10px;
+  background: rgba(0,0,0,.5);
+  border: 1px solid rgba(91, 139, 181, 0.35);
+  margin: 6px 0;
+}
+.prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80, #8db3d4);
+  transition: width 60ms linear;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+}
+
+/* ── TREATMENT GRID ───────────────────────────────────────────────────────── */
+.treat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.treat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 6px;
+  border: 1px solid rgba(91, 139, 181, 0.25);
+  background: none;
+  cursor: pointer;
+  color: #e8eef5;
+  font-family: 'JetBrains Mono', monospace;
+  transition: opacity 0.15s;
+  -webkit-app-region: no-drag;
+}
+.treat-btn:disabled { opacity: 0.36; cursor: not-allowed; }
+.treat-btn:not(:disabled):hover { filter: brightness(1.15); }
+
+/* ── BODY FIGURE ZONES ────────────────────────────────────────────────────── */
+.zone-path { cursor: pointer; transition: filter 0.12s; }
+.zone-path:hover { filter: brightness(1.28); }
+
+/* ── UNIT ROWS ────────────────────────────────────────────────────────────── */
+.unit-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 4px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 0.1s;
+  font-size: 12px;
+}
+.unit-row:hover { background: rgba(91, 139, 181, 0.1); }
+.sub-row {
+  font-size: 11px;
+  padding: 3px 0 3px 4px;
+  color: #a8b8cc;
+  cursor: pointer;
+}
+.sub-row:hover { color: #cdd9e8; }
+
+/* ── STATUS DOTS ──────────────────────────────────────────────────────────── */
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+/* ── NETS GRID ────────────────────────────────────────────────────────────── */
+.nets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 7px; }
+.net-card {
+  padding: 10px 12px;
+  cursor: pointer;
+  border: 1px solid rgba(91, 139, 181, 0.22);
+  border-left: 3px solid rgba(91, 139, 181, 0.22);
+  background: rgba(13, 26, 46, 0.5);
+  transition: background 0.12s;
+  -webkit-app-region: no-drag;
+}
+.net-card.active { border-left-color: var(--accent-hi); background: rgba(91, 139, 181, 0.14); }
+.net-card:hover { background: rgba(91, 139, 181, 0.1); }
+
+/* ── BREVITY GRID ─────────────────────────────────────────────────────────── */
+.brev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 7px; }
+.brev-card { padding: 9px 11px; border: 1px solid var(--border); background: rgba(13, 26, 46, 0.5); }
+
+/* ── PATIENT CARDS (medic view) ───────────────────────────────────────────── */
+.patient-card {
+  border: 1px solid var(--border);
+  background: rgba(13, 26, 46, 0.65);
+  padding: 10px 12px;
+  cursor: pointer;
+  margin-bottom: 7px;
+  transition: border-color 0.15s;
+}
+.patient-card.critical { border-color: #dc2626; }
+.patient-card.downed   { border-color: #ef4444; }
+.patient-card:hover    { background: rgba(91, 139, 181, 0.1); }
+
+/* ── ROLE LOADOUT ─────────────────────────────────────────────────────────── */
+.ld-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.ld-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 3px;
+  border: 1px solid rgba(91, 139, 181, 0.14);
+}
+
+/* ── INVENTORY GRID ───────────────────────────────────────────────────────── */
+.inv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.inv-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 10px 6px;
+  border: 1px solid rgba(91, 139, 181, 0.2);
+}
+
+/* ── 9-LINE DRAWER ────────────────────────────────────────────────────────── */
+#drawer-9l {
+  position: fixed;
+  top: 32px; right: 0; bottom: 0;
+  width: min(100%, 400px);
+  background: rgba(10, 20, 38, 0.97);
+  backdrop-filter: blur(18px);
+  border-left: 2px solid var(--red);
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  animation: sright 0.22s ease-out;
+}
+
+/* ── FLOATING BUTTON (9-LINE) ─────────────────────────────────────────────── */
+#btn-9l {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 54px;
+  height: 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--red);
+  background: rgba(239, 68, 68, 0.13);
+  cursor: pointer;
+  color: var(--red-soft);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.28);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+  -webkit-app-region: no-drag;
+}
+
+/* ── LOGIN SCREEN ─────────────────────────────────────────────────────────── */
+#login-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at top, #1a2f52 0%, #0a1424 60%, #050b18 100%);
+  z-index: 999;
+}
+#login-box {
+  width: 100%;
+  max-width: 360px;
+  padding: 28px;
+  border: 1px solid rgba(91, 139, 181, 0.5);
+  background: rgba(16, 30, 52, 0.88);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 0 60px rgba(91, 139, 181, 0.25);
+}
+
+/* ── ORBITRON UTILITY ─────────────────────────────────────────────────────── */
+.orb { font-family: 'Orbitron', sans-serif; }
+
+/* ── MISC HELPERS ─────────────────────────────────────────────────────────── */
+.stat-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; color: #a8b8cc; }
