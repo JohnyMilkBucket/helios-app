@@ -854,6 +854,17 @@ html.popout-mode #content{padding:10px 12px}
                 </div>
               </div>
             </div>
+
+            <!-- SOFTWARE UPDATE -->
+            <div class="panel" style="padding:15px">
+              <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">SOFTWARE</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <div><div class="setting-label">Version</div><div class="setting-sub" id="settings-app-version">—</div></div>
+                <button class="btn" onclick="checkForUpdatesManual()" style="font-size:9px;padding:6px 10px">CHECK FOR UPDATES</button>
+              </div>
+              <div id="settings-update-status" style="font-size:11px;color:var(--accent)">Auto-updates on — Helios checks for new versions automatically.</div>
+            </div>
+
           </div>
         </div>
 
@@ -1038,14 +1049,14 @@ html.popout-mode #content{padding:10px 12px}
               </div>
             </div>
 
-            <!-- SOFTWARE UPDATE -->
+            <!-- MEDICAL CLEANUP -->
             <div class="panel" style="padding:15px">
-              <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">SOFTWARE</div>
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                <div><div class="setting-label">Version</div><div class="setting-sub" id="settings-app-version">—</div></div>
-                <button class="btn" onclick="checkForUpdatesManual()" style="font-size:9px;padding:6px 10px">CHECK FOR UPDATES</button>
+              <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">MEDICAL</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <div><div class="setting-label">Casualties</div><div class="setting-sub" id="admin-patient-count">0 active</div></div>
+                <button class="btn btn-red" onclick="clearAllPatients()" style="font-size:9px;padding:6px 10px">CLEAR ALL PATIENTS</button>
               </div>
-              <div id="settings-update-status" style="font-size:11px;color:var(--accent)">Auto-updates on — Helios checks for new versions automatically.</div>
+              <div style="font-size:9px;color:var(--accent)">Wipes every casualty record on this card — use at the end of an op to reset for the next one. Each player's own MY STATUS clears automatically.</div>
             </div>
 
           </div>
@@ -1890,6 +1901,8 @@ function subscribeAll(cardId) {
     $('patient-badge').textContent = cnt ? `(${cnt})` : ''
     $('qs-cas').textContent = cnt
     $('qs-cas').style.color = cnt>0 ? 'var(--red)' : 'var(--green)'
+    const adminCnt = $('admin-patient-count')
+    if(adminCnt) adminCnt.textContent = snap.docs.length + ' active' // includes self, unlike S.patients
     if(S.medView==='patients') renderPatients()
   }))
 }
@@ -3343,9 +3356,22 @@ window.startApply = (zone, treatment, target) => {
     openTreat(S.applying.zone, S.applying.target||'self')
     if(pct>=100){
       clearInterval(applyInterval)
-      await finishApply(S.applying)
-      S.applying=null
-      if($('treat-modal').style.display!=='none') openTreat(zone,target)
+      // If the Firestore write in finishApply ever fails (network blip,
+      // brief disconnect — plausible mid-session), S.applying must still
+      // get cleared. Otherwise startApply's `if(S.applying) return` guard
+      // permanently locks the player out of every future treatment,
+      // including things like REMOVE TQ that look like they silently do
+      // nothing. The local zone/blood state was already mutated before the
+      // write inside finishApply, so the effect isn't lost either way —
+      // only the sync to Firestore is what can fail.
+      try {
+        await finishApply(S.applying)
+      } catch(e) {
+        console.error('Treatment failed to sync:', e)
+      } finally {
+        S.applying=null
+        if($('treat-modal').style.display!=='none') openTreat(zone,target)
+      }
     }
   },60)
 }
@@ -3418,23 +3444,39 @@ async function finishApply(a) {
     S.self.inv.blood = Math.max(0,(S.self.inv.blood||0)-1)
   }
 
-  // Write to Firestore
-  if(isSelf) {
-    await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
-      zones:S.self.zones, bloodPct:S.self.bloodPct, hr:S.self.hr,
-      uncon:S.self.uncon, dead:S.self.dead, stimsThisDown:S.self.stimsThisDown,
-      inv:S.self.inv, updatedAt:serverTimestamp()
-    },{merge:true})
-  } else if(patient) {
-    await setDoc(doc(db,'medical',S.cardId,'patients',patientId),{
-      zones:patient.zones, bloodPct:patient.bloodPct, hr:patient.hr,
-      uncon:patient.uncon, dead:patient.dead, stimsThisDown:patient.stimsThisDown,
-      updatedAt:serverTimestamp()
-    },{merge:true})
-    // Deduct from medic's own inventory
-    await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
-      inv:S.self.inv, updatedAt:serverTimestamp()
-    },{merge:true})
+  // Write to Firestore — local state above already reflects the treatment
+  // regardless of whether this sync succeeds, so a failed write here must
+  // never block the UI refresh below (that's what used to leave the
+  // progress bar/body map stuck mid-treatment on a network blip).
+  //
+  // Only touch the one zone this treatment actually changed (via a dot-path
+  // field, e.g. "zones.l_arm"), not the whole `zones` map. merge:true
+  // REPLACES nested map fields wholesale rather than deep-merging them, so
+  // writing the full zones object here was clobbering other zones whenever
+  // two medics treated the same patient around the same time — whichever
+  // write landed second would silently overwrite the first medic's change
+  // with its own (already-stale) local copy of the zone it never touched.
+  // Same reasoning applies to bloodPct/uncon/dead/stimsThisDown — only
+  // included when this specific treatment actually changes them.
+  try {
+    if(isSelf) {
+      const upd = { [`zones.${zone}`]: S.self.zones[zone], inv:S.self.inv, updatedAt:serverTimestamp() }
+      if(treatment==='blood') upd.bloodPct = S.self.bloodPct
+      if(treatment==='stim' || treatment==='depressant') upd.hr = S.self.hr
+      if(treatment==='stim') { upd.uncon=S.self.uncon; upd.dead=S.self.dead; upd.stimsThisDown=S.self.stimsThisDown }
+      await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid), upd, {merge:true})
+    } else if(patient) {
+      const upd = { [`zones.${zone}`]: patient.zones[zone], updatedAt:serverTimestamp() }
+      if(treatment==='blood') upd.bloodPct = patient.bloodPct
+      if(treatment==='stim') { upd.hr=patient.hr; upd.uncon=patient.uncon; upd.dead=patient.dead; upd.stimsThisDown=patient.stimsThisDown }
+      await setDoc(doc(db,'medical',S.cardId,'patients',patientId), upd, {merge:true})
+      // Deduct from medic's own inventory
+      await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
+        inv:S.self.inv, updatedAt:serverTimestamp()
+      },{merge:true})
+    }
+  } catch(e) {
+    console.error('Treatment failed to sync to Firestore:', e)
   }
 
   sfx('treatment-done')
@@ -3517,6 +3559,11 @@ function startTickers() {
   // Tourniquet clock — leaving a TQ on too long costs the limb permanently
   setInterval(async () => {
     if(!S.cardId||!S.self.down||S.self.dead) return
+    // Dot-path per changed zone only — a medic could be mid-treating a
+    // DIFFERENT zone on this same patient doc right now, and a whole-object
+    // `zones:S.self.zones` write here would clobber their edit the same way
+    // finishApply's used to (see the long comment there).
+    const upd = {}
     let changed = false
     for(const z of LIMBS) {
       const s = S.self.zones[z]
@@ -3524,15 +3571,15 @@ function startTickers() {
       if(Date.now()-s.tqAppliedAt >= TQ_LOSS_MS) {
         s.limbLost = true
         s.bleeding = false // nothing left to bleed
+        upd[`zones.${z}`] = s
         changed = true
         sfx('alert')
       }
     }
     if(changed) {
       updateBodyFigure()
-      await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
-        zones:S.self.zones, updatedAt:serverTimestamp()
-      },{merge:true})
+      await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),
+        {...upd, updatedAt:serverTimestamp()}, {merge:true})
       if(S.openZone) openTreat(S.openZone, S.openPatientId ? 'patient' : 'self')
     }
   },5000)
@@ -4973,6 +5020,18 @@ window.saveCardName = async () => {
   const name = $('admin-card-name')?.value.trim()
   if(!name) return
   await setDoc(doc(db,'cards',S.cardId),{name},{merge:true})
+}
+
+// Wipes every casualty record on the card — meant for end-of-op cleanup so
+// the next op doesn't start with everyone still marked as bled-out from the
+// last one. Each affected player's own MY STATUS clears itself automatically
+// via their own-medical-record listener once their doc is gone.
+window.clearAllPatients = async () => {
+  confirmInlineModal('Clear All Patients?','Wipes every active casualty record on this card, including your own if you\'re currently down. This cannot be undone.',true,async()=>{
+    sfx('alert')
+    const snap = await getDocs(collection(db,'medical',S.cardId,'patients'))
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)))
+  })
 }
 
 function updateAdminUI() {
