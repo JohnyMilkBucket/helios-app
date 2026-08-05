@@ -19,7 +19,7 @@
 // a new sub-unit, assigned/unassigned a member, etc).
 
 import {
-  doc, setDoc, deleteDoc, addDoc, collection, serverTimestamp, deleteField,
+  doc, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, deleteField,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 
 export function normalizeSubUnits(subUnits) {
@@ -55,14 +55,14 @@ export async function createSubUnit(db, cardId, unitId, name) {
   // overwrote the first) — doc(collection(...)).id gets a real random
   // Firestore-style id for free, no document actually created at that path.
   const subId = doc(collection(db,'cards',cardId,'units')).id
-  await setDoc(doc(db,'cards',cardId,'units',unitId),
-    { [`subUnits.${subId}`]: { name, members:[] } }, {merge:true})
+  await updateDoc(doc(db,'cards',cardId,'units',unitId),
+    { [`subUnits.${subId}`]: { name, members:[] } })
   return subId
 }
 
 export async function deleteSubUnit(db, cardId, unitId, subId) {
-  await setDoc(doc(db,'cards',cardId,'units',unitId),
-    { [`subUnits.${subId}`]: deleteField() }, {merge:true})
+  await updateDoc(doc(db,'cards',cardId,'units',unitId),
+    { [`subUnits.${subId}`]: deleteField() })
 }
 
 // unit must be the current unit object (for directMembers/subUnits reads);
@@ -76,7 +76,7 @@ export async function assignMember(db, cardId, unit, subId, uid) {
   const map = normalizeSubUnits(unit.subUnits)
   const sub = map[subId] || {name:'', members:[]}
   const members = [...new Set([...(sub.members||[]), uid])]
-  await setDoc(doc(db,'cards',cardId,'units',unit.id), { [`subUnits.${subId}.members`]: members }, {merge:true})
+  await updateDoc(doc(db,'cards',cardId,'units',unit.id), { [`subUnits.${subId}.members`]: members })
 }
 
 export async function unassignMember(db, cardId, unit, subId, uid) {
@@ -89,5 +89,5 @@ export async function unassignMember(db, cardId, unit, subId, uid) {
   const sub = map[subId]
   if(!sub) return
   const members = (sub.members||[]).filter(id=>id!==uid)
-  await setDoc(doc(db,'cards',cardId,'units',unit.id), { [`subUnits.${subId}.members`]: members }, {merge:true})
+  await updateDoc(doc(db,'cards',cardId,'units',unit.id), { [`subUnits.${subId}.members`]: members })
 }
