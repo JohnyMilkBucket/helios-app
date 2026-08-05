@@ -1205,7 +1205,7 @@ html.popout-mode #content{padding:10px 12px}
         <div class="orb" style="font-size:10px;color:var(--hi);margin-bottom:6px;letter-spacing:.1em">TREATMENTS</div>
         <div style="font-size:11px;color:#cdd9e8;line-height:1.9">
           🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before the bleeding actually stops — keep bandaging until it does. 5s per try, 15s if fragmentation is present.<br>
-          🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only, never head/torso. Stops bleeding instantly (3s to apply) but cuts circulation: that limb is unusable the whole time it's on (see INCAPACITATION below), and left on past ~4 minutes risks losing the limb entirely past 6.<br>
+          🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only, never head/torso. Stops bleeding instantly (3s to apply). It doesn't numb the limb right away — past ~4 minutes it goes numb and becomes unusable (see INCAPACITATION below, you'll get a callout when it happens), and past ~6 minutes you lose the limb entirely.<br>
           🦴 <b style="color:#a78bfa">Splint</b> — Fixes a fracture. 6s.<br>
           ⚡ <b style="color:var(--purple)">Stimulant</b> — Safe wake-up on an unconscious patient. On a conscious patient it's an overdose: heart rate spikes to 200-250 and each dose taken while already spiked adds +2% risk of cardiac death (stacking). 3s.<br>
           💧 <b style="color:var(--blue)">Depressant</b> — Normally just lowers heart rate. If the patient is currently overdosing on stims, it clears the overdose outright instead. 3s.<br>
@@ -1216,10 +1216,10 @@ html.popout-mode #content{padding:10px 12px}
         <div class="orb" style="font-size:10px;color:var(--red);margin-bottom:6px;letter-spacing:.1em">INCAPACITATION — WHAT YOU CAN'T DO</div>
         <div style="font-size:11px;color:var(--redsoft);line-height:1.7">
           • Unconscious or deceased — can't act, can't speak on radio<br>
-          • One arm broken or tourniqueted — rifle unusable, pistol only<br>
-          • Both arms broken or tourniqueted — no weapon usable at all<br>
-          • Either leg broken or tourniqueted — can't walk<br>
-          Your MY STATUS panel (and a medic's view of you) shows a live "CANNOT" summary whenever any of these apply.
+          • One arm broken, or a tourniqueted arm gone numb — rifle unusable, pistol only<br>
+          • Both arms broken/numb — no weapon usable at all<br>
+          • Either leg broken, or a tourniqueted leg gone numb — can't walk<br>
+          A tourniquet doesn't cost you the limb's use the instant it goes on — it takes ~4 minutes of cut circulation for it to go numb (you'll get an audio callout when it does). Your MY STATUS panel (and a medic's view of you) shows a live "CANNOT" summary whenever any of these apply.
         </div>
       </div>
     </div>
@@ -1347,10 +1347,14 @@ const APPLY_MS = {
 }
 const ZONES = ['head','torso','l_arm','r_arm','l_leg','r_leg']
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
+const ZONE_SPEECH = {l_arm:'left arm',r_arm:'right arm',l_leg:'left leg',r_leg:'right leg'}
 const ICON_POS = {head:{x:86,y:8},torso:{x:86,y:88},l_arm:{x:30,y:161},r_arm:{x:140,y:161},l_leg:{x:72,y:260},r_leg:{x:106,y:260}}
 // Tourniquets only make sense on limbs — never head or torso.
 const LIMBS = ['l_arm','r_arm','l_leg','r_leg']
-// A TQ left on too long costs the limb. Warn well before the cutoff.
+// A TQ doesn't numb the limb the instant it goes on — circulation loss takes
+// a few minutes to actually cost you the use of it, and a few more past that
+// to cost you the limb outright. TQ_WARN_MS is also the numbness cutoff
+// (limb becomes unusable), TQ_LOSS_MS is the permanent-loss cutoff.
 const TQ_WARN_MS  = 4*60*1000
 const TQ_LOSS_MS  = 6*60*1000
 const DEFAULT_BREVITY = [] // blank slate — admins add their own
@@ -3023,12 +3027,16 @@ window.toggleDown = async () => {
     //   Tier 1: tier 1-2 bleed, 20% chance of frag, never fractures
     //   Tier 2: tier 2 bleed (low chance of tier 3), always frag, 30% fracture
     //   Tier 3: tier 3 bleed, always frag, always fracture
-    // A head hit skips all of this — it's always instantly fatal.
-    const shuffled=[...ZONES].sort(()=>Math.random()-.5)
-    const count=1+Math.floor(Math.random()*4)
+    // A head hit skips all of this — it's always instantly fatal, so it's
+    // rolled separately at a low flat chance instead of being just another
+    // one of the 6 zones (that made most casualties instant deaths).
+    const HEAD_HIT_CHANCE = 0.08
+    const headHit = Math.random() < HEAD_HIT_CHANCE
+    const bodyPool = ZONES.filter(z=>z!=='head')
+    const shuffled = [...bodyPool].sort(()=>Math.random()-.5)
+    const count = 1+Math.floor(Math.random()*4)
     S.self.zones={}
-    const hitZones = shuffled.slice(0,count)
-    const headHit = hitZones.includes('head')
+    const hitZones = headHit ? ['head', ...shuffled.slice(0,Math.max(0,count-1))] : shuffled.slice(0,count)
     hitZones.forEach(z=>{
       const wr = Math.random()
       const wtier = wr<.6 ? 1 : wr<.9 ? 2 : 3
@@ -3039,7 +3047,7 @@ window.toggleDown = async () => {
       const injType = bleedTier===1?'BLEED_LOW':bleedTier===2?'BLEED':'BLEED_HIGH'
       S.self.zones[z] = {
         inj:injType, frag, bleeding:true, tq:false, fracture, pain:true,
-        bandaged:false, bandagesApplied:0, tqAppliedAt:null, limbLost:false,
+        bandaged:false, bandagesApplied:0, tqAppliedAt:null, tqNumb:false, limbLost:false,
       }
     })
     // Only a severe (tier 3) bleed knocks someone out immediately — lesser
@@ -3129,15 +3137,15 @@ function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='
   renderCapabilitySummary(zones, dead, uncon, prefix)
 }
 
-// A limb under a live tourniquet is just as unusable as a broken one — the
-// cut circulation numbs/weakens it long before the 6-minute limb-loss timer
-// (TQ_LOSS_MS) ever fires, so it's a separate, immediate kind of impairment
-// on top of that eventual "lose the limb" risk, not the same thing.
+// A tourniquet doesn't numb the limb the instant it's on — it takes a few
+// minutes of cut circulation (TQ_WARN_MS, tracked as s.tqNumb) before it's
+// actually unusable, same as a fracture from then on. Before that point the
+// TQ has stopped the bleeding but the limb still works fine.
 function getCapabilityRestrictions(zones, dead, uncon) {
   if(dead) return ['Deceased — cannot act or speak on radio']
   const out = []
   if(uncon) out.push('Unconscious — cannot act or speak on radio')
-  const impaired = z => { const s=zones?.[z]; return !!(s && (s.fracture || s.tq || s.limbLost)) }
+  const impaired = z => { const s=zones?.[z]; return !!(s && (s.fracture || s.tqNumb || s.limbLost)) }
   const armsDown = ['l_arm','r_arm'].filter(impaired).length
   const legsDown = ['l_leg','r_leg'].filter(impaired).length
   if(armsDown>=2) out.push('Cannot use arms — no weapon usable')
@@ -3177,7 +3185,8 @@ function renderOverview(zones, prefix='') {
     if(s.bleeding && !s.tq) lines.push(`<div style="font-size:10px;color:var(--red)">Lost some blood</div>`)
     if(s.tq) {
       lines.push(`<div style="font-size:10px;color:var(--amber)">Tourniquet [CAT]</div>`)
-      if(s.tqAppliedAt && Date.now()-s.tqAppliedAt>=TQ_WARN_MS) lines.push(`<div style="font-size:10px;color:var(--red)">⚠ TQ time critical</div>`)
+      if(s.tqNumb) lines.push(`<div style="font-size:10px;color:var(--red)">⚠ Limb numb — unusable</div>`)
+      if(s.tqAppliedAt && Date.now()-s.tqAppliedAt>=TQ_LOSS_MS-60000) lines.push(`<div style="font-size:10px;color:var(--red);font-weight:700">⚠ TQ time critical</div>`)
     }
     if(s.fracture) lines.push(`<div style="font-size:10px;color:#a78bfa">Fractured</div>`)
     if(s.pain)     lines.push(`<div style="font-size:10px;color:#a8b8cc">In pain</div>`)
@@ -3346,7 +3355,8 @@ window.openTreat = (zone, target='self') => {
     else st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING CONTROLLED</div>`
     if(s.tq && s.tqAppliedAt) {
       const tqMs = Date.now()-s.tqAppliedAt
-      if(tqMs>=TQ_WARN_MS) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ TQ ON ${Math.floor(tqMs/60000)}m — REMOVE OR LOSE LIMB SOON</div>`
+      if(s.tqNumb) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ LIMB NUMB — UNUSABLE WHILE TQ IS ON</div>`
+      if(tqMs>=TQ_LOSS_MS-60000) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ TQ ON ${Math.floor(tqMs/60000)}m — REMOVE OR LOSE LIMB SOON</div>`
     }
     // Doesn't reveal exactly how many more are needed — just that it's not
     // fully packed yet, so the player keeps bandaging until it sticks.
@@ -3489,7 +3499,7 @@ async function finishApply(a) {
   const isSelf = target!=='patient'
   const patient = isSelf ? null : S.patients.find(p=>p.id===patientId)
 
-  const zoneDefault = () => ({inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,tqAppliedAt:null,limbLost:false})
+  const zoneDefault = () => ({inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,tqAppliedAt:null,tqNumb:false,limbLost:false})
 
   // A wound needs as many bandage applications as its severity tier calls
   // for (BANDAGES_NEEDED) before it's actually packed — the player is never
@@ -3508,22 +3518,26 @@ async function finishApply(a) {
     else applyBandage(patient?.zones?.[zone])
     S.self.inv.bandage = Math.max(0,(S.self.inv.bandage||0)-1)
   } else if(treatment==='tourniquet'&&LIMBS.includes(zone)) {
+    // Fresh TQ — circulation loss hasn't set in yet, so the limb stays
+    // usable until the numbness clock (TQ_WARN_MS) catches up to it.
     if(isSelf) {
       if(!S.self.zones[zone]) S.self.zones[zone]=zoneDefault()
-      S.self.zones[zone].tq=true; S.self.zones[zone].bleeding=false; S.self.zones[zone].tqAppliedAt=Date.now()
+      S.self.zones[zone].tq=true; S.self.zones[zone].bleeding=false; S.self.zones[zone].tqAppliedAt=Date.now(); S.self.zones[zone].tqNumb=false
     } else if(patient) {
       if(!patient.zones[zone]) patient.zones[zone]=zoneDefault()
-      patient.zones[zone].tq=true; patient.zones[zone].bleeding=false; patient.zones[zone].tqAppliedAt=Date.now()
+      patient.zones[zone].tq=true; patient.zones[zone].bleeding=false; patient.zones[zone].tqAppliedAt=Date.now(); patient.zones[zone].tqNumb=false
     }
     S.self.inv.tourniquet = Math.max(0,(S.self.inv.tourniquet||0)-1)
   } else if(treatment==='remove_tourniquet') {
     // No inventory cost — pulling a TQ only resumes bleeding if the wound
-    // was never packed with a bandage while it was on.
+    // was never packed with a bandage while it was on. Feeling comes back
+    // to the limb the moment the TQ is off.
     if(isSelf) {
       const zs = S.self.zones[zone]
-      if(zs) { zs.tq=false; zs.tqAppliedAt=null; zs.bleeding = zs.bandaged ? false : !!zs.inj }
+      if(zs) { zs.tq=false; zs.tqAppliedAt=null; zs.tqNumb=false; zs.bleeding = zs.bandaged ? false : !!zs.inj }
     } else if(patient?.zones?.[zone]) {
       const zs = patient.zones[zone]
+      zs.tqNumb=false
       zs.tq=false; zs.tqAppliedAt=null; zs.bleeding = zs.bandaged ? false : !!zs.inj
     }
   } else if(treatment==='splint') {
@@ -3708,12 +3722,21 @@ function startTickers() {
     for(const z of LIMBS) {
       const s = S.self.zones[z]
       if(!s || !s.tq || s.limbLost || !s.tqAppliedAt) continue
-      if(Date.now()-s.tqAppliedAt >= TQ_LOSS_MS) {
+      const tqMs = Date.now()-s.tqAppliedAt
+      if(tqMs >= TQ_LOSS_MS) {
         s.limbLost = true
         s.bleeding = false // nothing left to bleed
         upd[`zones.${z}`] = s
         changed = true
         sfx('alert')
+      } else if(!s.tqNumb && tqMs >= TQ_WARN_MS) {
+        // Circulation loss just caught up to this limb — it goes numb and
+        // becomes unusable, distinct from (and well before) losing it outright.
+        s.tqNumb = true
+        upd[`zones.${z}`] = s
+        changed = true
+        sfx('alert')
+        callout(`${ZONE_SPEECH[z]} unusable, tourniquet`)
       }
     }
     if(changed) {
@@ -5275,6 +5298,21 @@ function confirmInlineModal(title, body, danger, onConfirm) {
     closeInlineModal('helios-confirm')
     onConfirm()
   })
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SPOKEN CALLOUTS — short TTS lines for things worth hearing without having
+// to be looking at the screen (e.g. a limb going numb under a tourniquet).
+// Uses the OS/browser's built-in speech synthesis — no audio assets needed.
+// ════════════════════════════════════════════════════════════════════════════
+function callout(text) {
+  try {
+    if(!('speechSynthesis' in window)) return
+    const u = new SpeechSynthesisUtterance(text)
+    u.rate = 1.05
+    u.volume = Math.min(1, parseInt($('spk-vol')?.value ?? 80)/100)
+    speechSynthesis.speak(u)
+  } catch(e) {}
 }
 
 // ════════════════════════════════════════════════════════════════════════════
