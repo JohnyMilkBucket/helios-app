@@ -192,7 +192,7 @@ function rollInjuries() {
 // derived list, not a single record) — index.html re-syncs its own
 // `S.patients` reference via the onPatientsChange hook each time.
 const M = {
-  self: { down:false, uncon:false, dead:false, zones:{}, bloodPct:100, hr:78, overdosing:false, odStacks:0, inv:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0} },
+  self: { down:false, uncon:false, dead:false, deathCause:null, zones:{}, bloodPct:100, hr:78, overdosing:false, odStacks:0, inv:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0} },
   patients: [],
   db:null, cardId:null, uid:null,
   listeners: [],
@@ -212,17 +212,20 @@ export function initMedical(db, cardId, uid, hooks) {
       M.self.down       = d.down       ?? false
       M.self.uncon      = d.uncon      ?? false
       M.self.dead       = d.dead       ?? false
+      M.self.deathCause = d.deathCause ?? null
       M.self.overdosing = d.overdosing ?? false
       M.self.odStacks   = d.odStacks   ?? 0
-      M.self.inv        = d.inv        || M.self.inv
+      // NOTE: inv deliberately not read here — inventory is a persistent
+      // per-member resource now (see syncInventory), independent of this
+      // casualty doc's lifecycle. It used to live here and silently reset
+      // to full every time this doc got deleted on revive.
       // A medic's treatment (e.g. a fatal stim overdose) can kill/knock you
       // out remotely — cut an already-held PTT immediately, don't wait for
       // the next keypress.
       if(!wasDead && M.self.dead) hooks.onSelfDied?.()
     } else {
-      M.self.down=false; M.self.uncon=false; M.self.dead=false; M.self.zones={}; M.self.bloodPct=100
+      M.self.down=false; M.self.uncon=false; M.self.dead=false; M.self.deathCause=null; M.self.zones={}; M.self.bloodPct=100
       M.self.overdosing=false; M.self.odStacks=0
-      M.self.inv = hooks.getDefaultInv?.() || M.self.inv
     }
     hooks.onSelfChange?.(M.self)
   })
@@ -248,33 +251,36 @@ export function cleanupMedical() {
   M.listeners = []
 }
 
-// Called by index.html whenever the player's role loadout changes AND
-// they're not currently down — inventory while down is tracked on the
-// medical doc itself (see markDown/applyTreatment); only the "not down"
-// baseline is derived live from the loadout.
-export function syncInventoryFromLoadout(inv) {
-  if(!M.self.down) M.self.inv = {...inv}
+// Inventory is a persistent per-member resource — it lives on the member
+// doc (cards/{cardId}/members/{uid}.inv), not on this casualty doc, and
+// does NOT reset on revive or on going down. It only resets when an admin
+// starts a new operation (see createOp), which refills every roster
+// member's inv back to their current role loadout. A member with no inv
+// field yet (never in a started op) is treated as having none at all.
+// Called by index.html whenever the member doc's inv field changes.
+export function syncInventory(inv) {
+  M.self.inv = {...inv}
 }
 
 export async function markDown(username) {
   const { zones, headHit, startUncon } = rollInjuries()
   M.self.zones = zones
   M.self.bloodPct = 100; M.self.down = true; M.self.uncon = startUncon; M.self.dead = headHit
+  M.self.deathCause = headHit ? 'headshot' : null
   M.self.overdosing = false; M.self.odStacks = 0
   if(headHit) M.self.hr = 0
   await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid), {
     username, uid: M.uid,
     zones: M.self.zones, bloodPct: M.self.bloodPct, overdosing:false, odStacks:0,
-    down:true, uncon:startUncon, dead:headHit, ...(headHit?{hr:0}:{}), inv:{...M.self.inv},
+    down:true, uncon:startUncon, dead:headHit, deathCause:M.self.deathCause, ...(headHit?{hr:0}:{}),
     downdAt: Date.now(), updatedAt: serverTimestamp(),
   })
   return { headHit, startUncon }
 }
 
-export async function revive(defaultInv) {
-  M.self.down=false; M.self.uncon=false; M.self.dead=false; M.self.zones={}; M.self.bloodPct=100
+export async function revive() {
+  M.self.down=false; M.self.uncon=false; M.self.dead=false; M.self.deathCause=null; M.self.zones={}; M.self.bloodPct=100
   M.self.overdosing=false; M.self.odStacks=0; M.self.hr=78
-  M.self.inv = {...defaultInv}
   await deleteDoc(doc(M.db,'medical',M.cardId,'patients',M.uid))
 }
 
@@ -330,12 +336,13 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
   }
 
   if(isSelf) {
-    const upd = { [`zones.${zone}`]: M.self.zones[zone], inv:M.self.inv, updatedAt:serverTimestamp() }
+    const upd = { [`zones.${zone}`]: M.self.zones[zone], updatedAt:serverTimestamp() }
     if(treatment==='blood') upd.bloodPct = M.self.bloodPct
     if(treatment==='stim' || treatment==='depressant') upd.hr = M.self.hr
     if(treatment==='stim' || treatment==='depressant') { upd.overdosing=M.self.overdosing; upd.odStacks=M.self.odStacks }
     if(treatment==='stim') { upd.uncon=M.self.uncon; upd.dead=M.self.dead }
     await updateDoc(doc(M.db,'medical',M.cardId,'patients',M.uid), upd)
+    if(treatment!=='remove_tourniquet') await syncInventoryWrite()
     return { isSelf:true, diedFromStim: treatment==='stim' && M.self.dead, self:M.self }
   } else if(patient) {
     const upd = { [`zones.${zone}`]: patient.zones[zone], updatedAt:serverTimestamp() }
@@ -344,12 +351,17 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
     if(treatment==='stim' || treatment==='depressant') { upd.overdosing=patient.overdosing; upd.odStacks=patient.odStacks }
     if(treatment==='stim') { upd.uncon=patient.uncon; upd.dead=patient.dead }
     await updateDoc(doc(M.db,'medical',M.cardId,'patients',patientId), upd)
-    // Deduct from the medic's own inventory.
-    await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid), {
-      inv: M.self.inv, updatedAt: serverTimestamp()
-    }, {merge:true})
+    if(treatment!=='remove_tourniquet') await syncInventoryWrite()
     return { isSelf:false, patient }
   }
+}
+
+// Inventory always belongs to the ACTING player (the medic), regardless of
+// who they treated — persisted on their own member doc, not the casualty
+// doc, so it survives reviving/going down and is only ever refilled by
+// starting a new operation (see createOp in index.html).
+async function syncInventoryWrite() {
+  await setDoc(doc(M.db,'cards',M.cardId,'members',M.uid), { inv: M.self.inv }, {merge:true})
 }
 
 // Tourniquet clock — leaving a TQ on too long costs the limb permanently.
@@ -404,10 +416,11 @@ export function startMedicalTickers(hooks) {
       if(M.self.bloodPct<=0) {
         // Bled out — deceased. Only a full revive can bring them back.
         M.self.dead = true
+        M.self.deathCause = 'bleed_out'
         M.self.hr = 0
         hooks.onBleedOut?.()
         await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
-          bloodPct:0, hr:0, dead:true, uncon:true, updatedAt:serverTimestamp()
+          bloodPct:0, hr:0, dead:true, deathCause:'bleed_out', uncon:true, updatedAt:serverTimestamp()
         },{merge:true})
         return
       }
@@ -439,10 +452,10 @@ export function startMedicalTickers(hooks) {
 
     if(M.self.hr >= OD_ARREST_HR) {
       // Cardiac arrest — only a revive can bring them back, same as bleeding out.
-      M.self.dead = true; M.self.uncon = true; M.self.overdosing = false
+      M.self.dead = true; M.self.deathCause = 'cardiac_arrest'; M.self.uncon = true; M.self.overdosing = false
       hooks.onCardiacArrest?.()
       await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
-        hr:OD_ARREST_HR, dead:true, uncon:true, overdosing:false, updatedAt:serverTimestamp()
+        hr:OD_ARREST_HR, dead:true, deathCause:'cardiac_arrest', uncon:true, overdosing:false, updatedAt:serverTimestamp()
       },{merge:true})
       return
     }

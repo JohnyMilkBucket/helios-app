@@ -107,6 +107,19 @@ html.popout-mode #content{padding:10px 12px}
 /* Content */
 #content{flex:1;overflow-y:auto;padding:18px 20px;position:relative}
 .tab{display:none}.tab.active{display:block}
+/* WIP caution-tape treatment — used to mark a tab/panel as not fully
+   verified yet (currently: comms, pending a real two-peer voice test). */
+.wip-tape-border{
+  outline:3px dashed #fbbf24;outline-offset:8px;
+  box-shadow:0 0 0 8px #0a1220;
+}
+.wip-banner{
+  display:flex;align-items:center;gap:10px;padding:8px 14px;margin-bottom:16px;
+  background:repeating-linear-gradient(135deg,#fbbf24 0 12px,#111 12px 24px);
+  color:#111;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  letter-spacing:.15em;
+}
+.wip-banner>span{background:#111;color:#fbbf24;padding:3px 8px;white-space:nowrap}
 /* ═══════════════════════════════════════════════
    COMMON COMPONENTS
    ═══════════════════════════════════════════════ */
@@ -489,13 +502,13 @@ html.popout-mode #content{padding:10px 12px}
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
           COMMS
         </button>
-        <button onclick="switchTab('roles',this)">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          ROLES
-        </button>
         <button onclick="switchTab('orbat',this)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="8" y="14" width="8" height="7"/><line x1="7" y1="10" x2="12" y2="14"/><line x1="17" y1="10" x2="12" y2="14"/></svg>
           ORBAT
+        </button>
+        <button onclick="switchTab('roles',this)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          ROLES
         </button>
         <button onclick="switchTab('jointops',this)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -522,7 +535,10 @@ html.popout-mode #content{padding:10px 12px}
               <div style="font-size:9px;letter-spacing:.3em;color:var(--accent)">ACTIVE &amp; ARCHIVED</div>
               <h2 class="orb" style="font-size:19px;font-weight:700;margin-top:4px">OPERATIONS</h2>
             </div>
-            <button class="btn btn-blue" onclick="showNewOpModal()" id="new-op-btn" style="display:none" onclick="showNewOpModal()">+ NEW OP</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn" onclick="quickTestOp()" id="quick-test-op-btn" style="display:none;color:var(--amber);border-color:rgba(251,191,36,.4)">⚡ QUICK TEST OP</button>
+              <button class="btn btn-blue" onclick="showNewOpModal()" id="new-op-btn" style="display:none">+ NEW OP</button>
+            </div>
           </div>
           <div id="ops-list"><div style="font-size:11px;color:var(--accent);text-align:center;padding:40px">NO OPERATIONS YET</div></div>
         </div>
@@ -545,7 +561,7 @@ html.popout-mode #content{padding:10px 12px}
           </div>
 
           <div id="medical-popout-placeholder" style="display:none;text-align:center;padding:60px 20px;color:var(--accent);font-size:11px;letter-spacing:.15em;line-height:1.8">
-            ↗ POPPED OUT — floating in its own window
+            ↗ POPPED OUT — open in its own standalone window
             <div><button class="btn" onclick="togglePopoutPanel('medical')" style="margin-top:14px;font-size:9px;padding:6px 12px">◀ BRING BACK</button></div>
           </div>
 
@@ -663,7 +679,8 @@ html.popout-mode #content{padding:10px 12px}
         </div>
 
         <!-- COMMS TAB -->
-        <div id="tab-comms" class="tab">
+        <div id="tab-comms" class="tab wip-tape-border">
+          <div class="wip-banner"><span>⚠ WORK IN PROGRESS</span> Voice has not been fully verified on a live two-peer connection yet — channel join/PTT UI works, but treat audio as unconfirmed until then.</div>
           <div style="margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
             <div>
               <div style="font-size:9px;letter-spacing:.3em;color:var(--accent)">RADIO · BREVITY</div>
@@ -1758,7 +1775,7 @@ async function enterCard(cardId) {
   // Load user member record
   const memSnap = await getDoc(doc(db,'cards',cardId,'members',S.user.uid))
   S.member = memSnap.exists() ? memSnap.data() : {}
-  Medical.syncInventoryFromLoadout(S.member.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})
+  Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})
 
   // Load card doc BEFORE showing anything, so an expired license shows the
   // lock screen straight away instead of flashing the full app first.
@@ -1788,6 +1805,7 @@ async function enterCard(cardId) {
   // Show admin controls
   if(S.member.isAdmin) {
     $('new-op-btn').style.display='block'
+    $('quick-test-op-btn').style.display='block'
     $('new-chan-btn').style.display='block'
     $('new-role-btn').style.display='block'
     const aub=$('add-unit-btn'); if(aub) aub.style.display='block'
@@ -1837,10 +1855,14 @@ function subscribeAll(cardId) {
     // Refresh own member record — catches role/loadout changes made by admin
     const myUpdated = S.members.find(m=>m.id===S.user?.uid)
     if(myUpdated) {
-      const ldChanged = JSON.stringify(myUpdated.ld) !== JSON.stringify(S.member?.ld)
+      const invChanged = JSON.stringify(myUpdated.inv) !== JSON.stringify(S.member?.inv)
       S.member = myUpdated
-      if(ldChanged && !S.self.down) {
-        Medical.syncInventoryFromLoadout(S.member.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})
+      if(invChanged) {
+        // Inventory is a persistent per-member resource (see medical.js) —
+        // mirror it straight from the member doc any time it changes,
+        // regardless of down state. Only ever refilled by starting a new
+        // operation, never by revive/going down.
+        Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})
         renderInventory()
       }
       // Update user strip
@@ -2465,12 +2487,24 @@ function renderOps() {
   `).join('')
 }
 
+// Starting an operation is the ONLY thing that refills medical supplies —
+// each roster member's inv resets to their current role loadout. Inventory
+// otherwise persists permanently (used is used, no auto-refill on revive),
+// so this is deliberately the one reset button admins have.
+async function resetRosterSupplies(members) {
+  const zero = {bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
+  await Promise.all(members.map(m =>
+    setDoc(doc(db,'cards',S.cardId,'members',m.uid||m.id), { inv:{...(m.ld||zero)} }, {merge:true})
+  ))
+}
+
 window.showNewOpModal = () => { $('new-op-modal').style.display='flex'; $('op-name-inp').value=''; $('op-obj-inp').value='' }
 window.createOp = async () => {
   const name = $('op-name-inp')?.value.trim().toUpperCase()
   const obj  = $('op-obj-inp')?.value.trim()
   if(!name) return
-  const roster = [...opRoster.values()].map(m => ({
+  const rosterMembers = [...opRoster.values()]
+  const roster = rosterMembers.map(m => ({
     uid:      m.uid||m.id,
     username: m.username||m.callsign||m.id,
     role:     m.role||'OPERATOR',
@@ -2483,8 +2517,32 @@ window.createOp = async () => {
     roster, rosterCount:roster.length,
     createdBy:S.user.uid, createdAt:serverTimestamp()
   })
+  await resetRosterSupplies(rosterMembers)
   $('new-op-modal').style.display='none'
   opRoster.clear()
+}
+
+// One-click op for quick testing — skips the name/roster modal entirely,
+// rosters every current card member, and resets everyone's supplies to
+// their loadout immediately. Same admin-only gating as a normal op.
+window.quickTestOp = async () => {
+  confirmInlineModal('Start Test Operation?','Rosters everyone currently on the card and resets every member\'s medical supplies to their role loadout. Meant for quick testing, not a real op.',false,async()=>{
+    const rosterMembers = S.members
+    const roster = rosterMembers.map(m => ({
+      uid:      m.uid||m.id,
+      username: m.username||m.callsign||m.id,
+      role:     m.role||'OPERATOR',
+      color:    m.color||'#a8b8cc',
+      unit:     getUnitLabel(m.uid||m.id),
+    }))
+    sfx('notify')
+    await addDoc(collection(db,'cards',S.cardId,'operations'),{
+      name:'TEST OP', objective:'Quick test operation — supplies reset to loadout', status:'active',
+      roster, rosterCount:roster.length,
+      createdBy:S.user.uid, createdAt:serverTimestamp()
+    })
+    await resetRosterSupplies(rosterMembers)
+  })
 }
 window.archiveOp = async (id) => {
   await updateDoc(doc(db,'cards',S.cardId,'operations',id),{ status:'archived' })
@@ -2930,7 +2988,7 @@ function updateDownBtn() {
 // that are this file's concern (sfx, joint-ops sync, re-render).
 window.toggleDown = async () => {
   if(S.self.down) {
-    await Medical.revive(S.member.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})
+    await Medical.revive()
     await syncToJointCasualties({down:false})
     sfx('revive')
     updateDownBtn()
@@ -2939,6 +2997,7 @@ window.toggleDown = async () => {
     const { headHit, startUncon } = await Medical.markDown(
       S.profile.username||S.member?.username||S.profile.callsign||'UNKNOWN OPERATIVE'
     )
+    await syncToJointCasualties({down:true, bloodPct:100, uncon:startUncon})
     sfx('casualty')
     if(startUncon) silenceAllRadios() // conscious-but-down can still call for help over the net
     updateDownBtn()
@@ -3192,7 +3251,7 @@ window.openTreat = (zone, target='self') => {
 
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
-    : { zones:S.self.zones, inv:S.self.inv, uncon:S.self.uncon, dead:S.self.dead, overdosing:S.self.overdosing, odStacks:S.self.odStacks }
+    : { zones:S.self.zones, inv:S.self.inv, uncon:S.self.uncon, dead:S.self.dead, deathCause:S.self.deathCause, overdosing:S.self.overdosing, odStacks:S.self.odStacks }
 
   if(!patient) return
 
@@ -3210,7 +3269,8 @@ window.openTreat = (zone, target='self') => {
   // Status
   let st = ''
   if(patient.dead) {
-    st = `<div style="font-size:12px;color:#9ca3af;font-weight:700">☠ DECEASED — BLED OUT</div>`
+    const causeLabel = { headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST' }[patient.deathCause] || 'DECEASED'
+    st = `<div style="font-size:12px;color:#9ca3af;font-weight:700">☠ DECEASED — ${causeLabel}</div>`
   } else if(s?.limbLost) {
     st = `<div style="font-size:12px;color:#6b7280;font-weight:700">✕ LIMB LOST — tourniquet was left on too long</div>`
   } else if(s) {

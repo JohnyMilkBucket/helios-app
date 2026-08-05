@@ -108,6 +108,26 @@ whole-field writes, maps allow dot-path writes. `medical.js`'s `zones` field
 already followed this (keyed by body zone) before this session; `subUnits`
 now does too.
 
+## Medical inventory lives on the member doc, not the casualty doc
+
+`inv` (bandage/tourniquet/splint/stim/depressant/blood counts) used to live
+on the medical patient doc, which meant it reset to full every time that
+doc got deleted — i.e. every revive. That was never the intent, it was just
+where the field happened to sit. It now lives on
+`cards/{cardId}/members/{uid}.inv`, a genuinely separate document with its
+own lifecycle:
+
+- **Written by:** whoever administers a treatment, always to *their own*
+  member doc (`syncInventoryWrite()` in `medical.js`), regardless of
+  whether they treated themselves or someone else — matches who the rules
+  already let write there (`memberId == userId()`), no rules change needed.
+- **Refilled by:** starting an operation (`createOp` / `quickTestOp` in
+  index.html) — every rostered member's `inv` gets set to their current
+  role loadout at that moment. Nothing else refills it. A member never
+  rostered into a started op has `inv: undefined`, treated as all-zero.
+- **Never touched by:** `markDown` / `revive` — going down or reviving no
+  longer reads or writes `inv` at all.
+
 ## What does *not* need this treatment
 
 Not every piece of state is a race risk. `renderer/js/voice.js` and the

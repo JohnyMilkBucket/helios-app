@@ -3,13 +3,13 @@ const path = require('path')
 const { autoUpdater } = require('electron-updater')
 
 let mainWindow
-// panel ('medical' | 'comms') -> its own floating overlay BrowserWindow.
-// These are the only windows that keep the old transparent/always-on-top
-// overlay behavior — the main window is now a normal app window.
+// panel ('medical' | 'comms') -> its own popped-out BrowserWindow. Medical
+// pops out as a real standalone window; comms keeps the floating
+// transparent/always-on-top overlay behavior — see STANDALONE_PANELS below.
 const popouts = {}
 
 const POPOUT_SIZE = {
-  medical: { width: 420, height: 600 },
+  medical: { width: 560, height: 720 },
   comms:   { width: 400, height: 560 },
 }
 
@@ -70,6 +70,13 @@ function createWindow() {
   })
 }
 
+// Medical pops out as a genuine standalone window — a real taskbar entry,
+// not pinned always-on-top, closer to opening a second normal window than
+// a HUD overlay. Comms stays the original floating overlay (transparent,
+// frameless, always-on-top, no taskbar entry) since that's the one meant to
+// float on top of a game while you're mid-op.
+const STANDALONE_PANELS = new Set(['medical'])
+
 function openPopoutWindow(panel) {
   const existing = popouts[panel]
   if (existing && !existing.isDestroyed()) {
@@ -80,6 +87,7 @@ function openPopoutWindow(panel) {
 
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const size = POPOUT_SIZE[panel] || { width: 400, height: 560 }
+  const standalone = STANDALONE_PANELS.has(panel)
 
   const win = new BrowserWindow({
     width: size.width,
@@ -87,16 +95,18 @@ function openPopoutWindow(panel) {
     x: width - size.width - 40,
     y: 80,
 
-    // These ARE the overlay windows now — transparent, frameless, always on
-    // top of the game, no taskbar entry.
-    transparent: true,
+    // Overlay panels (comms): transparent, frameless, always on top of the
+    // game, no taskbar entry. Standalone panels (medical): a normal window
+    // — keeps the custom frameless titlebar look (the renderer draws its
+    // own), but is otherwise just a second independent app window.
+    transparent: !standalone,
     frame: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    hasShadow: false,
+    alwaysOnTop: !standalone,
+    skipTaskbar: !standalone,
+    hasShadow: standalone,
     resizable: true,
-    minWidth: 260,
-    minHeight: 320,
+    minWidth: standalone ? 480 : 260,
+    minHeight: standalone ? 400 : 320,
 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -106,8 +116,10 @@ function openPopoutWindow(panel) {
     }
   })
 
-  win.setAlwaysOnTop(true, 'screen-saver')
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  if (!standalone) {
+    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'), { search: `popout=${panel}` })
   win.setMenuBarVisibility(false)
 
