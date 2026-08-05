@@ -3,6 +3,12 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.5
+- Added a mobile web companion at helios-app-c803f.web.app — same account,
+  same card, no install. Check the roster, active operation, and
+  casualties, and treat patients (including yourself) from a phone.
+  Comms, ORBAT, roles, and admin tools remain desktop-only for now.
+
 ## v1.4.4
 - Added a short tutorial for every tab (Operations, Medical, Comms, ORBAT,
   Roles, Joint Ops, Admin, Settings). Shows once automatically the first

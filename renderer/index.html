@@ -903,6 +903,14 @@ html.popout-mode #content{padding:10px 12px}
               <div id="settings-update-status" style="font-size:11px;color:var(--accent)">Auto-updates on — Helios checks for new versions automatically.</div>
             </div>
 
+            <!-- MOBILE COMPANION -->
+            <div class="panel" style="padding:15px">
+              <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">MOBILE COMPANION</div>
+              <div style="font-size:11px;color:#a8b8cc;margin-bottom:10px">Check the roster, active op, casualties, and treat patients from a phone — same account and card, no install needed.</div>
+              <div class="orb" style="font-size:13px;font-weight:700;color:var(--hi)">helios-app-c803f.web.app</div>
+              <div style="font-size:10px;color:var(--accent);margin-top:8px">Comms, ORBAT, roles, and admin tools are desktop-only for now.</div>
+            </div>
+
             <!-- TUTORIALS -->
             <div class="panel" style="padding:15px">
               <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">TUTORIALS</div>
@@ -1386,6 +1394,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.5', items:[
+    'Added a mobile web companion (helios-app-c803f.web.app) — same account, no install. Check roster/ops/casualties and treat patients from a phone. Comms/ORBAT/roles/admin stay desktop-only for now.',
+  ]},
   { v:'1.4.4', items:[
     'Added a short tutorial for every tab — shows once automatically, can be skipped, and can be replayed from Settings → Tutorials.',
   ]},

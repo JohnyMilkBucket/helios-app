@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>HELIOS MOBILE</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;min-height:100%;background:#060d1a;font-family:'JetBrains Mono',monospace;color:#e8eef5}
+body{padding-bottom:64px}
+:root{
+  --panel:rgba(12,22,42,.9);--border:rgba(91,139,181,.25);--accent:#5b8bb5;--hi:#8db3d4;
+  --green:#4ade80;--red:#ef4444;--redsoft:#fca5a5;--amber:#fbbf24;--purple:#a78bfa;
+}
+.orb{font-family:'Orbitron',sans-serif}
+.hidden{display:none!important}
+input,select{width:100%;background:rgba(6,14,28,.7);border:1px solid var(--border);color:#e8eef5;
+  padding:12px;font-family:inherit;font-size:14px;border-radius:2px}
+button{font-family:inherit;cursor:pointer}
+.btn{background:rgba(91,139,181,.12);border:1px solid var(--border);color:var(--hi);
+  padding:12px 14px;font-size:11px;letter-spacing:.12em;border-radius:2px}
+.btn:active{background:rgba(91,139,181,.28)}
+.btn-blue{background:rgba(96,165,250,.15);border-color:rgba(96,165,250,.5);color:#93c5fd}
+.btn-green{background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.45);color:var(--green)}
+.btn-red{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.45);color:var(--redsoft)}
+.btn-amber{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.45);color:var(--amber)}
+.btn:disabled{opacity:.35;pointer-events:none}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.btn-row .btn{flex:1;min-width:90px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:14px;margin-bottom:12px}
+.label{font-size:9px;letter-spacing:.25em;color:var(--accent);margin-bottom:8px}
+.err{color:var(--redsoft);font-size:11px;margin-top:8px;min-height:14px}
+#screen-auth,#screen-cards{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.authbox{width:100%;max-width:360px}
+.authbox h1{font-family:'Orbitron',sans-serif;font-size:26px;text-align:center;letter-spacing:.15em}
+.authbox .sub{text-align:center;font-size:9px;letter-spacing:.25em;color:var(--accent);margin:6px 0 18px}
+.authbox label{display:block;font-size:9px;letter-spacing:.2em;color:var(--accent);margin:10px 0 5px}
+#topbar{position:sticky;top:0;z-index:20;background:rgba(6,14,28,.96);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:10px 14px}
+#topbar .cardname{font-size:12px;font-weight:700;letter-spacing:.1em}
+#topbar .sub{font-size:9px;color:var(--accent);letter-spacing:.15em}
+#main{padding:14px;max-width:520px;margin:0 auto}
+#navbar{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(6,14,28,.97);
+  border-top:1px solid var(--border);z-index:20}
+#navbar button{flex:1;background:none;border:none;color:var(--accent);font-size:9px;letter-spacing:.15em;
+  padding:12px 4px;display:flex;flex-direction:column;align-items:center;gap:3px}
+#navbar button.active{color:#fff}
+#navbar button .ic{font-size:16px}
+.zone-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;
+  border-bottom:1px solid rgba(91,139,181,.12)}
+.zone-row:last-child{border-bottom:none}
+.zone-name{font-size:11px;letter-spacing:.1em;color:#cfd9e6}
+.zone-status{font-size:10px}
+.roster-row,.patient-row{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 0;border-bottom:1px solid rgba(91,139,181,.12);font-size:11.5px}
+.roster-row:last-child,.patient-row:last-child{border-bottom:none}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;
+  align-items:flex-end;justify-content:center}
+.modal-box{width:100%;max-width:520px;max-height:88vh;overflow-y:auto;background:rgba(9,18,34,.98);
+  border-top:2px solid var(--border);border-radius:10px 10px 0 0;padding:16px}
+.modal-box h3{font-size:13px;font-weight:700;letter-spacing:.08em;margin-bottom:12px}
+.stat{display:flex;justify-content:space-between;font-size:11px;color:#a8b8cc;padding:3px 0}
+.notice{font-size:10.5px;color:var(--accent);line-height:1.6;padding:10px 12px;
+  border:1px solid var(--border);border-radius:4px;background:rgba(91,139,181,.06)}
+.inv-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#a8b8cc;
+  border:1px solid var(--border);border-radius:12px;padding:4px 9px;margin:2px}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="screen-auth" class="hidden">
+  <div class="authbox">
+    <h1>HELIOS</h1>
+    <div class="sub">MOBILE COMPANION</div>
+    <div id="auth-login">
+      <label>USERNAME</label>
+      <input id="a-user" autocomplete="off"/>
+      <label>PASSWORD</label>
+      <input id="a-pass" type="password"/>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-blue" style="flex:1" onclick="doLogin()">LOG IN</button>
+      </div>
+      <div class="err" id="login-err"></div>
+      <div style="text-align:center;margin-top:10px">
+        <button class="btn" onclick="toggleAuthMode()" style="font-size:10px">CREATE ACCOUNT</button>
+      </div>
+    </div>
+    <div id="auth-register" class="hidden">
+      <label>USERNAME</label>
+      <input id="r-user" autocomplete="off"/>
+      <label>PASSWORD</label>
+      <input id="r-pass" type="password"/>
+      <label>CONFIRM PASSWORD</label>
+      <input id="r-pass2" type="password"/>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-green" style="flex:1" onclick="doRegister()">CREATE ACCOUNT</button>
+      </div>
+      <div class="err" id="reg-err"></div>
+      <div style="text-align:center;margin-top:10px">
+        <button class="btn" onclick="toggleAuthMode()" style="font-size:10px">BACK TO LOGIN</button>
+      </div>
+    </div>
+    <div class="notice" style="margin-top:16px">
+      Same account as the desktop app — log in with the same username &amp; password.
+    </div>
+  </div>
+</div>
+
+<!-- CARD SELECT -->
+<div id="screen-cards" class="hidden">
+  <div class="authbox">
+    <h1 style="font-size:20px">SELECT A CARD</h1>
+    <div id="cards-list" style="margin:16px 0"></div>
+    <div class="panel">
+      <div class="label">JOIN A CARD</div>
+      <input id="join-code" placeholder="6-CHARACTER INVITE CODE" autocomplete="off" style="text-transform:uppercase"/>
+      <button class="btn btn-blue" style="width:100%;margin-top:8px" onclick="doJoinCard()">JOIN</button>
+      <div class="err" id="join-err"></div>
+    </div>
+    <div class="notice">
+      Creating a new card requires a license key — do that from the desktop app.
+    </div>
+    <button class="btn" style="width:100%;margin-top:12px;color:var(--redsoft)" onclick="doLogout()">LOG OUT</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="screen-app" class="hidden">
+  <div id="topbar">
+    <div>
+      <div class="cardname" id="app-cardname">—</div>
+      <div class="sub" id="app-username">—</div>
+    </div>
+    <button class="btn" onclick="doLogout()" style="font-size:9px;padding:8px 10px">LOGOUT</button>
+  </div>
+  <div id="main">
+    <div id="view-dashboard"></div>
+    <div id="view-medical" class="hidden"></div>
+  </div>
+  <div id="navbar">
+    <button class="active" id="nav-dashboard" onclick="switchView('dashboard')"><span class="ic">&#9673;</span>DASHBOARD</button>
+    <button id="nav-medical" onclick="switchView('medical')"><span class="ic">&#10010;</span>MEDICAL</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, query, where }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
+import * as Medical from './js/medical.js'
+
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyCcWbbwl_fa5qu44UUpMqk1DQThvRnoRwM",
+  authDomain:        "helios-app-c803f.firebaseapp.com",
+  databaseURL:       "https://helios-app-c803f-default-rtdb.firebaseio.com",
+  projectId:         "helios-app-c803f",
+  storageBucket:     "helios-app-c803f.firebasestorage.app",
+  messagingSenderId: "165365716131",
+  appId:             "1:165365716131:web:fb5742d047df5c4aed5b16",
+}
+const EMAIL_DOMAIN = '@helios.internal'
+const cs2email = cs => cs.toLowerCase().replace(/[^a-z0-9._-]/g,'')+EMAIL_DOMAIN
+
+const app = initializeApp(FIREBASE_CONFIG)
+const auth = getAuth(app)
+const db = getFirestore(app)
+
+const $ = id => document.getElementById(id)
+const ZONES = Medical.ZONES
+const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
+const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST'}
+
+const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], self:Medical.getSelf(), patients:[], listeners:[] }
+
+// ── AUTH ──────────────────────────────────────────────────────────────────
+window.toggleAuthMode = () => {
+  $('auth-login').classList.toggle('hidden')
+  $('auth-register').classList.toggle('hidden')
+}
+window.doLogin = async () => {
+  const u = $('a-user').value.trim(), p = $('a-pass').value
+  if(!u||!p) return setErr('login-err','Enter your username and password')
+  try { await signInWithEmailAndPassword(auth, cs2email(u), p) }
+  catch(e) { setErr('login-err', e.code==='auth/invalid-credential'?'Invalid username or password':e.message) }
+}
+window.doRegister = async () => {
+  const u = $('r-user').value.trim(), p = $('r-pass').value, p2 = $('r-pass2').value
+  if(!u||u.length<2) return setErr('reg-err','Username must be at least 2 characters')
+  if(p.length<6) return setErr('reg-err','Password must be at least 6 characters')
+  if(p!==p2) return setErr('reg-err','Passwords do not match')
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, cs2email(u), p)
+    await setDoc(doc(db,'users',cred.user.uid), { username:u, callsign:null, uid:cred.user.uid, currentCard:null, cardIds:[], createdAt:serverTimestamp() })
+  } catch(e) { setErr('reg-err', e.code==='auth/email-already-in-use'?'Username already taken':e.message) }
+}
+window.doLogout = async () => {
+  cleanupListeners()
+  if(S.cardId && S.user) await setDoc(doc(db,'cards',S.cardId,'members',S.user.uid),{online:false},{merge:true}).catch(()=>{})
+  await signOut(auth)
+  location.reload()
+}
+function setErr(id,msg){ $(id).textContent = msg||'' }
+
+// ── CARD SELECT / JOIN ──────────────────────────────────────────────────
+window.doJoinCard = async () => {
+  const code = $('join-code').value.trim().toUpperCase()
+  if(code.length!==6) return setErr('join-err','Code must be exactly 6 characters')
+  try {
+    const codeSnap = await getDoc(doc(db,'inviteCodes',code))
+    if(!codeSnap.exists()) return setErr('join-err','Invalid invite code')
+    const cardId = codeSnap.data().cardId
+    const existing = await getDoc(doc(db,'cards',cardId,'members',S.user.uid))
+    if(!existing.exists()) {
+      await setDoc(doc(db,'cards',cardId,'members',S.user.uid),{
+        username:S.profile.username||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OPERATOR', color:'#a8b8cc',
+        isAdmin:false, canTreatOthers:false, canCreateOps:false, canEditBrevity:false,
+        canMultiChan:false, online:true, joinedAt:serverTimestamp(),
+        ld:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
+      })
+    }
+    const cardIds = [...new Set([...(S.profile.cardIds||[]), cardId])]
+    await setDoc(doc(db,'users',S.user.uid),{cardIds, currentCard:cardId},{merge:true})
+    S.profile.cardIds = cardIds
+    enterCard(cardId)
+  } catch(e) { setErr('join-err', e.message) }
+}
+function renderCardsList() {
+  const ids = S.profile?.cardIds||[]
+  if(!ids.length) { $('cards-list').innerHTML = '<div class="notice">No cards yet — join one below with an invite code from your faction leader.</div>'; return }
+  $('cards-list').innerHTML = ids.map(id=>`<button class="btn" style="width:100%;margin-bottom:8px;text-align:left" onclick="enterCardFromList('${id}')">&rarr; ${id}</button>`).join('')
+}
+window.enterCardFromList = (id) => enterCard(id)
+
+// ── ENTER CARD ────────────────────────────────────────────────────────────
+async function enterCard(cardId) {
+  const memSnap = await getDoc(doc(db,'cards',cardId,'members',S.user.uid))
+  if(!memSnap.exists()) { setErr('join-err','You are no longer a member of that card'); return }
+  S.cardId = cardId
+  S.member = memSnap.data()
+  await setDoc(doc(db,'cards',cardId,'members',S.user.uid),{online:true},{merge:true})
+  await setDoc(doc(db,'users',S.user.uid),{currentCard:cardId},{merge:true})
+
+  show('screen-app')
+  $('app-username').textContent = (S.profile.username||'—') + ' · ' + (S.member.role||'OPERATOR')
+
+  const cardSnap = await getDoc(doc(db,'cards',cardId))
+  S.card = { id:cardId, ...cardSnap.data() }
+  $('app-cardname').textContent = S.card.name||'HELIOS CARD'
+
+  Medical.initMedical(db, cardId, S.user.uid, {
+    onSelfChange: () => renderMedicalView(),
+    onPatientsChange: () => renderMedicalView(),
+    onSelfDied: () => renderMedicalView(),
+  })
+  Medical.syncInventory(S.member.inv||{})
+  Medical.startMedicalTickers({
+    onTourniquetTick: () => renderMedicalView(),
+    onBloodTick: () => renderMedicalView(),
+    onOdTick: () => renderMedicalView(),
+    onBleedOut: () => renderMedicalView(),
+    onKnockedOut: () => renderMedicalView(),
+    onCardiacArrest: () => renderMedicalView(),
+    onLimbLost: () => renderMedicalView(),
+    onLimbNumb: () => renderMedicalView(),
+  })
+
+  S.listeners.push(onSnapshot(collection(db,'cards',cardId,'members'), snap => {
+    S.members = snap.docs.map(d=>({id:d.id,...d.data()}))
+    const me = S.members.find(m=>m.id===S.user.uid)
+    if(me) { S.member = me; Medical.syncInventory(me.inv||{}) }
+    renderDashboard(); renderMedicalView()
+  }))
+  S.listeners.push(onSnapshot(collection(db,'cards',cardId,'operations'), snap => {
+    S.ops = snap.docs.map(d=>({id:d.id,...d.data()})).filter(o=>o.status==='active')
+    renderDashboard()
+  }))
+
+  switchView('dashboard')
+}
+function cleanupListeners() {
+  S.listeners.forEach(u=>{try{u()}catch(e){}})
+  S.listeners = []
+  Medical.cleanupMedical()
+}
+function show(id) {
+  ['screen-auth','screen-cards','screen-app'].forEach(s=>$(s).classList.toggle('hidden', s!==id))
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────
+window.switchView = (v) => {
+  $('view-dashboard').classList.toggle('hidden', v!=='dashboard')
+  $('view-medical').classList.toggle('hidden', v!=='medical')
+  $('nav-dashboard').classList.toggle('active', v==='dashboard')
+  $('nav-medical').classList.toggle('active', v==='medical')
+  if(v==='dashboard') renderDashboard()
+  if(v==='medical') renderMedicalView()
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const el = $('view-dashboard')
+  if(!S.cardId) return
+  const activeOp = S.ops[0]
+  const online = S.members.filter(m=>m.online).length
+  const patients = Medical.getPatients()
+  el.innerHTML = `
+    <div class="panel">
+      <div class="label">ACTIVE OPERATION</div>
+      ${activeOp
+        ? `<div style="font-size:14px;font-weight:700">${activeOp.name}</div>
+           <div style="font-size:10.5px;color:#a8b8cc;margin-top:4px">${activeOp.objective||'No objective set'}</div>
+           <div style="font-size:10px;color:var(--accent);margin-top:6px">${activeOp.rosterCount||0} ROSTERED</div>`
+        : `<div style="font-size:11px;color:var(--accent)">No active operation</div>`}
+    </div>
+    <div class="panel">
+      <div class="label">ROSTER — ${online}/${S.members.length} ONLINE</div>
+      ${S.members.map(m=>`
+        <div class="roster-row">
+          <span><span class="dot" style="background:${m.online?'var(--green)':'#4b5568'}"></span>${m.username||m.id}</span>
+          <span style="color:var(--accent)">${m.role||''}</span>
+        </div>`).join('') || '<div style="font-size:11px;color:var(--accent)">No members</div>'}
+    </div>
+    <div class="panel">
+      <div class="label">CASUALTIES — ${patients.length}</div>
+      ${patients.length ? patients.map(p=>`
+        <div class="patient-row">
+          <span><span class="dot" style="background:${p.dead?'#4b5568':p.uncon?'var(--amber)':'var(--red)'}"></span>${p.username||p.id}</span>
+          <span style="color:${p.dead?'#94a3b8':'var(--redsoft)'}">${p.dead?(DEATH_LABEL[p.deathCause]||'DECEASED'):p.uncon?'UNCONSCIOUS':'DOWN'}</span>
+        </div>`).join('') : '<div style="font-size:11px;color:var(--accent)">No active casualties</div>'}
+    </div>
+    <div class="notice">Full comms, ORBAT, roles, and admin tools are available on the desktop app.</div>
+  `
+}
+
+// ── MEDICAL ───────────────────────────────────────────────────────────────
+function zoneStatus(zs) {
+  if(!zs) return {text:'CLEAR', color:'#a8b8cc'}
+  if(zs.limbLost) return {text:'LIMB LOST', color:'#94a3b8'}
+  if(zs.tq) return {text: zs.tqNumb?'TQ — NUMB':'TQ ON', color:'var(--amber)'}
+  if(zs.bleeding) return {text:'BLEEDING', color:'var(--red)'}
+  if(zs.fracture) return {text:'FRACTURED', color:'var(--purple)'}
+  if(zs.bandaged) return {text:'BANDAGED', color:'var(--green)'}
+  return {text:'CLEAR', color:'#a8b8cc'}
+}
+function renderMedicalView() {
+  const el = $('view-medical')
+  if(!S.cardId || el.classList.contains('hidden')) { if(!S.cardId) return }
+  const self = S.self
+  const canTreatOthers = !!(S.member?.canTreatOthers || S.member?.isAdmin)
+  const patients = Medical.getPatients()
+  const inv = self.inv||{}
+  el.innerHTML = `
+    <div class="panel">
+      <div class="label">MY STATUS</div>
+      ${self.dead
+        ? `<div style="color:var(--redsoft);font-size:13px;font-weight:700">DECEASED — ${DEATH_LABEL[self.deathCause]||'UNKNOWN CAUSE'}</div>
+           <button class="btn btn-green" style="width:100%;margin-top:10px" onclick="doRevive()">REVIVE</button>`
+        : self.down
+          ? `<div class="stat"><span>Blood</span><span>${Math.round(self.bloodPct)}%</span></div>
+             <div class="stat"><span>Heart Rate</span><span style="${self.overdosing?'color:var(--amber)':''}">${Math.round(self.hr)} bpm${self.overdosing?' — OVERDOSING':''}</span></div>
+             <div class="stat"><span>State</span><span>${self.uncon?'UNCONSCIOUS':'CONSCIOUS'}</span></div>
+             <div style="margin-top:8px">${ZONES.map(z=>{
+               const st = zoneStatus(self.zones[z])
+               return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[z]}</span><span class="zone-status" style="color:${st.color}">${st.text}</span></div>`
+             }).join('')}</div>
+             <button class="btn btn-blue" style="width:100%;margin-top:10px" onclick="openTreatSheet('self')">TREAT MYSELF</button>
+             <button class="btn btn-green" style="width:100%;margin-top:8px" onclick="doRevive()">REVIVE</button>`
+          : `<div style="font-size:11px;color:var(--green)">HEALTHY</div>
+             <button class="btn btn-red" style="width:100%;margin-top:10px" onclick="doMarkDown()">MARK MYSELF DOWN</button>`
+      }
+    </div>
+    <div class="panel">
+      <div class="label">SUPPLIES</div>
+      <div>${['bandage','tourniquet','splint','stim','depressant','blood'].map(k=>`<span class="inv-chip">${k.toUpperCase()}: ${inv[k]||0}</span>`).join('')}</div>
+    </div>
+    ${canTreatOthers ? `
+    <div class="panel">
+      <div class="label">PATIENTS — ${patients.length}</div>
+      ${patients.length ? patients.map(p=>`
+        <div class="patient-row">
+          <span>${p.username||p.id} ${p.dead?'— DECEASED':p.uncon?'— UNCONSCIOUS':''}</span>
+          ${p.dead ? '' : `<button class="btn" style="font-size:9px;padding:7px 10px" onclick="openTreatSheet('patient','${p.id}')">TREAT</button>`}
+        </div>`).join('') : '<div style="font-size:11px;color:var(--accent)">No patients need treatment</div>'}
+    </div>` : ''}
+  `
+}
+window.doMarkDown = async () => {
+  await Medical.markDown(S.profile.username||'UNKNOWN OPERATIVE')
+  renderMedicalView()
+}
+window.doRevive = async () => {
+  await Medical.revive()
+  renderMedicalView()
+}
+
+// ── TREAT SHEET (bottom modal) ────────────────────────────────────────────
+let treatTarget = null // {target:'self'|'patient', patientId}
+window.openTreatSheet = (target, patientId) => {
+  treatTarget = { target, patientId }
+  renderTreatSheet()
+}
+function closeTreatSheet() { $('treat-sheet')?.remove(); treatTarget = null }
+window.closeTreatSheet = closeTreatSheet
+function getTreatTargetObj() {
+  if(!treatTarget) return null
+  return treatTarget.target==='self' ? S.self : Medical.getPatients().find(p=>p.id===treatTarget.patientId)
+}
+async function doTreat(zone, treatment) {
+  await Medical.applyTreatment({ zone, treatment, target:treatTarget.target, patientId:treatTarget.patientId })
+  renderTreatSheet()
+  renderMedicalView()
+}
+window.doTreat = doTreat
+function renderTreatSheet() {
+  closeExistingSheetOnly()
+  const obj = getTreatTargetObj()
+  if(!obj) return
+  const inv = S.self.inv||{}
+  const bg = document.createElement('div')
+  bg.className = 'modal-bg'
+  bg.id = 'treat-sheet'
+  bg.addEventListener('click', e => { if(e.target===bg) closeTreatSheet() })
+  bg.innerHTML = `
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <h3>TREAT — ${treatTarget.target==='self' ? 'MYSELF' : (obj.username||obj.id)}</h3>
+      <div class="stat"><span>Blood</span><span>${Math.round(obj.bloodPct)}%</span></div>
+      <div class="stat"><span>Heart Rate</span><span>${Math.round(obj.hr)} bpm${obj.overdosing?' — OVERDOSING':''}</span></div>
+      <div style="margin:10px 0">
+        ${ZONES.map(z=>renderZoneTreatRow(z, obj.zones[z], inv)).join('')}
+      </div>
+      <div class="label" style="margin-top:6px">SYSTEMIC</div>
+      <div class="btn-row">
+        <button class="btn btn-amber" ${!inv.stim?'disabled':''} onclick="doTreat(null,'stim')">STIM (${inv.stim||0})</button>
+        <button class="btn" ${!inv.depressant?'disabled':''} onclick="doTreat(null,'depressant')">DEPRESSANT (${inv.depressant||0})</button>
+        <button class="btn btn-red" ${!inv.blood?'disabled':''} onclick="doTreat(null,'blood')">BLOOD (${inv.blood||0})</button>
+      </div>
+      <button class="btn" style="width:100%;margin-top:14px" onclick="closeTreatSheet()">CLOSE</button>
+    </div>`
+  document.body.appendChild(bg)
+}
+function closeExistingSheetOnly() { $('treat-sheet')?.remove() }
+function renderZoneTreatRow(zone, zs, inv) {
+  const st = zoneStatus(zs)
+  const actions = []
+  if(zs?.bleeding) actions.push(`<button class="btn" ${!inv.bandage?'disabled':''} onclick="doTreat('${zone}','bandage')" style="font-size:9px;padding:7px 8px">BANDAGE</button>`)
+  if(Medical.LIMBS.includes(zone) && zs?.bleeding && !zs.tq) actions.push(`<button class="btn btn-amber" ${!inv.tourniquet?'disabled':''} onclick="doTreat('${zone}','tourniquet')" style="font-size:9px;padding:7px 8px">TQ</button>`)
+  if(zs?.tq && !zs.limbLost) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_tourniquet')" style="font-size:9px;padding:7px 8px">REMOVE TQ</button>`)
+  if(zs?.fracture) actions.push(`<button class="btn" ${!inv.splint?'disabled':''} onclick="doTreat('${zone}','splint')" style="font-size:9px;padding:7px 8px">SPLINT</button>`)
+  return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[zone]}<br><span style="color:${st.color};font-size:9px">${st.text}</span></span><span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">${actions.join('')||'<span style="font-size:9px;color:var(--accent)">—</span>'}</span></div>`
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, async user => {
+  S.user = user
+  if(!user) { show('screen-auth'); return }
+  const profSnap = await getDoc(doc(db,'users',user.uid))
+  S.profile = profSnap.exists() ? profSnap.data() : { username:user.email?.split('@')[0]||'UNKNOWN', cardIds:[] }
+  if(S.profile.currentCard) {
+    const memSnap = await getDoc(doc(db,'cards',S.profile.currentCard,'members',user.uid))
+    if(memSnap.exists()) { await enterCard(S.profile.currentCard); return }
+  }
+  show('screen-cards')
+  renderCardsList()
+})
+</script>
+</body>
+</html>
