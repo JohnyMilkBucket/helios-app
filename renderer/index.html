@@ -1330,8 +1330,11 @@ import { getDatabase, ref as dbRef, set as dbSet, push as dbPush, remove as dbRe
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js'
 
 // ── VOICE (WebRTC mesh, signaled over Realtime Database) ──────────────────
-import { initVoice, setRtdb, joinChannel as voiceJoin, leaveChannel as voiceLeave, leaveAllChannels as voiceLeaveAll, listenChannelPresence, getChannelAudioStats }
+import { initVoice, setRtdb, leaveAllChannels as voiceLeaveAll }
   from './js/voice.js'
+
+// ── COMMS ───────────────────────────────────────────────────────────────────
+import * as Comms from './js/comms.js'
 
 // ── ROLES ───────────────────────────────────────────────────────────────────
 import {
@@ -1382,11 +1385,13 @@ const S = {
   patients: [],
   units: [],
   cardRoles: [],
-  // Voice
-  activeChanIds: new Set(), localStream: null, peerConns: new Map(),
-  muted: false, micDeviceId: null, spkDeviceId: null, radioVolume: 100,
-  radioPTTKeys: { left: 'BracketLeft', right: 'BracketRight' },
-  earTestKeys: { left: null, right: null },
+  // Voice — the actual live Set/object owned by js/comms.js. Never
+  // reassigned; the module mutates them in place, same pattern as
+  // Medical.getSelf(). Everything else comms-related (mic/PTT/ear-test
+  // state) is fully internal to comms.js now — index.html only ever calls
+  // its exported functions, it doesn't need to mirror those fields too.
+  activeChanIds: Comms.getActiveChanIds(),
+  radioSlots: Comms.getRadioSlots(),
   // UI
   activeChan: null, openZone: null, openPatientId: null, applying: null, progress: 0, medView: 'self',
   poppedOut: { medical: false, comms: false },
@@ -1824,7 +1829,7 @@ async function enterCard(cardId) {
   subscribeAll(cardId)
   startTickers()
   startZulu()
-  populateDevices()
+  Comms.populateDevices($('mic-select'), $('spk-select'))
   renderInventory()
   if(S.card?.currentJointOp) restoreJointOp(S.card.currentJointOp)
   updateCardSettingsUI()
@@ -1926,8 +1931,7 @@ function subscribeAll(cardId) {
     // A medic's treatment (e.g. a fatal stim overdose) can kill/knock you
     // out remotely — cut an already-held PTT immediately, don't wait for
     // the next keypress.
-    onSelfDied: () => silenceAllRadios(),
-    getDefaultInv: () => ({ ...(S.member?.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}) }),
+    onSelfDied: () => Comms.silenceAllRadios(),
     onPatientsChange: (patients, meta) => {
       S.patients = patients
       if(meta.newCasualty && S.cardId) sfx('casualty')
@@ -1939,6 +1943,24 @@ function subscribeAll(cardId) {
       if(adminCnt) adminCnt.textContent = meta.totalIncludingSelf + ' active' // includes self, unlike S.patients
       if(S.medView==='patients') renderPatients()
     },
+  })
+
+  // Comms — channel join/leave, PTT, ear routing, mic device + test all
+  // live in js/comms.js now; this wires its hooks to this file's render
+  // functions and error-modal builders.
+  Comms.initComms(cardId, {
+    onChange: () => { renderNets(); renderActiveRadioSlots(); renderChanMembers() },
+    isIncapacitated: () => S.self.dead || S.self.uncon,
+    sfx: (name) => sfx(name),
+    noiseSuppressionEnabled: () => $('noise-toggle')?.checked !== false,
+    micMeterRowEl: () => $('mic-meter-row'),
+    micMeterBarEl: () => $('mic-meter-bar'),
+    onTransmitChange: (chanId, transmitting) => {
+      const el = $('radio-slot-'+chanId)
+      if(el) el.style.boxShadow = transmitting ? '0 0 0 1px var(--green), 0 0 12px rgba(74,222,128,.35)' : ''
+    },
+    onMicError: (message) => openInlineModal('mic-err','<div class="modal-box" style="max-width:320px;border-color:var(--red)" onclick="closeInlineModal(\'mic-err\')"><div class="modal-head"><div class="orb" style="font-size:13px;font-weight:700;color:var(--red)">MIC ACCESS DENIED</div></div><div style="padding:14px 16px;font-size:12px;color:var(--redsoft)">' + message + '</div></div>'),
+    onVoiceJoinFailed: () => openInlineModal('voice-err','<div class="modal-box" style="max-width:320px;border-color:var(--red)" onclick="closeInlineModal(\'voice-err\')"><div class="modal-head"><div class="orb" style="font-size:13px;font-weight:700;color:var(--red)">VOICE CONNECTION FAILED</div></div><div style="padding:14px 16px;font-size:12px;color:var(--redsoft)">Could not connect to this net. Check your connection and try again.</div></div>'),
   })
 }
 
@@ -2999,7 +3021,7 @@ window.toggleDown = async () => {
     )
     await syncToJointCasualties({down:true, bloodPct:100, uncon:startUncon})
     sfx('casualty')
-    if(startUncon) silenceAllRadios() // conscious-but-down can still call for help over the net
+    if(startUncon) Comms.silenceAllRadios() // conscious-but-down can still call for help over the net
     updateDownBtn()
     updateBodyFigure(); renderInventory()
   }
@@ -3452,7 +3474,7 @@ async function finishApply(a) {
   let syncError = null, result = null
   try {
     result = await Medical.applyTreatment({zone, treatment, target, patientId})
-    if(result?.diedFromStim) silenceAllRadios()
+    if(result?.diedFromStim) Comms.silenceAllRadios()
   } catch(e) {
     console.error('Treatment failed to sync to Firestore:', e)
     syncError = e
@@ -3570,10 +3592,10 @@ function startTickers() {
     onTourniquetTick: () => { updateBodyFigure(); refreshOpenTreat() },
     onLimbLost: (z) => sfx('alert'),
     onLimbNumb: (z) => { sfx('alert'); callout(`${ZONE_SPEECH[z]} unusable, tourniquet`) },
-    onBleedOut: () => { sfx('alert'); silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
-    onKnockedOut: () => { sfx('alert'); silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
+    onBleedOut: () => { sfx('alert'); Comms.silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
+    onKnockedOut: () => { sfx('alert'); Comms.silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
     onOdTick: () => updateBodyFigure(),
-    onCardiacArrest: () => { sfx('alert'); silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
+    onCardiacArrest: () => { sfx('alert'); Comms.silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
   })
 }
 
@@ -3586,363 +3608,87 @@ function startZulu() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// VOICE
+// VOICE / COMMS — device selection, mic test, PTT, ear test, and the radio
+// join/leave/ear-routing system all live in js/comms.js now. This file just
+// wires its hooks to render calls and provides thin window.* wrappers for
+// the inline onclick handlers in the HTML below.
 // ════════════════════════════════════════════════════════════════════════════
-async function populateDevices() {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    const mics = devices.filter(d=>d.kind==='audioinput')
-    const spks = devices.filter(d=>d.kind==='audiooutput')
-    const micSel=$('mic-select'), spkSel=$('spk-select')
-    if(micSel) { micSel.innerHTML=''; mics.forEach(d=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||'Mic '+d.deviceId.slice(0,6); micSel.appendChild(o) }) }
-    if(spkSel) { spkSel.innerHTML=''; spks.forEach(d=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label||'Speaker '+d.deviceId.slice(0,6); spkSel.appendChild(o) }) }
-  } catch(e) { console.log('Device enum failed:',e.message) }
-}
+const MAX_CHANNELS = Comms.MAX_CHANNELS
 
-window.applyMicDevice = async () => {
-  S.micDeviceId=$('mic-select')?.value
-  if(S.localStream) { S.localStream.getTracks().forEach(t=>t.stop()); S.localStream=null }
-}
-window.applySpeakerDevice = () => { S.spkDeviceId=$('spk-select')?.value }
+window.applyMicDevice = () => Comms.applyMicDevice($('mic-select')?.value)
+window.applySpeakerDevice = () => Comms.applySpeakerDevice($('spk-select')?.value)
 window.applyNoiseSuppression = () => { /* Applied on next stream acquisition */ }
 window.applyMicVolume = (v) => { /* Could apply gain node here */ }
 window.applySpeakerVolume = (v) => {
   document.querySelectorAll('audio').forEach(a=>{ a.volume=parseInt(v)/100 })
 }
-
-// Radio volume — applies live to every currently-connected peer across every
-// joined net, and is remembered for peers who connect afterward too.
-window.applyRadioVolume = (v) => {
-  S.radioVolume = parseInt(v)
-  for(const slot of Object.values(S.radioSlots)) {
-    for(const nodes of slot.peerNodes.values()) {
-      nodes.gain.gain.value = S.radioVolume/100
-    }
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// MIC TEST — Discord-style live level meter, no round trip needed
-// ════════════════════════════════════════════════════════════════════════════
-let micTestStream=null, micTestCtx=null, micTestAnalyser=null, micTestRAF=null
+window.applyRadioVolume = (v) => Comms.applyRadioVolume(v)
 
 window.toggleMicTest = async () => {
-  if(micTestStream) { stopMicTest(); return }
   const btn = $('mic-test-btn')
-  try {
-    micTestStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: S.micDeviceId ? {exact:S.micDeviceId} : undefined,
-        noiseSuppression: $('noise-toggle')?.checked !== false,
-        echoCancellation: true,
-      }
-    })
-  } catch(e) {
-    if(btn) btn.textContent = 'MIC ACCESS DENIED'
-    setTimeout(()=>{ if(btn) btn.textContent='TEST MIC' }, 2000)
+  if(Comms.isMicTestRunning()) {
+    Comms.stopMicTest($('mic-test-bar'))
+    if(btn) btn.textContent='TEST MIC'
     return
   }
-
-  micTestCtx = new AudioContext()
-  if(micTestCtx.state==='suspended') micTestCtx.resume().catch(()=>{})
-  const source = micTestCtx.createMediaStreamSource(micTestStream)
-  micTestAnalyser = micTestCtx.createAnalyser()
-  micTestAnalyser.fftSize = 512
-  micTestAnalyser.smoothingTimeConstant = 0.6
-  source.connect(micTestAnalyser)
-
-  if(btn) btn.textContent = 'STOP TEST'
-  const data = new Uint8Array(micTestAnalyser.frequencyBinCount)
-  const bar = $('mic-test-bar')
-
-  const tick = () => {
-    micTestAnalyser.getByteTimeDomainData(data)
-    let sumSq = 0
-    for(let i=0;i<data.length;i++) { const v=(data[i]-128)/128; sumSq += v*v }
-    const rms = Math.sqrt(sumSq/data.length)
-    const pct = Math.min(100, Math.round(rms*350)) // scaled so normal speech reads mid-high
-    if(bar) {
-      bar.style.width = pct+'%'
-      bar.style.background = pct>85?'#dc2626':pct>55?'#fbbf24':'#4ade80'
-    }
-    micTestRAF = requestAnimationFrame(tick)
-  }
-  tick()
-}
-
-function stopMicTest() {
-  if(micTestRAF) cancelAnimationFrame(micTestRAF)
-  micTestRAF = null
-  if(micTestStream) { micTestStream.getTracks().forEach(t=>t.stop()); micTestStream=null }
-  if(micTestCtx) { micTestCtx.close().catch(()=>{}); micTestCtx=null }
-  micTestAnalyser = null
-  const btn = $('mic-test-btn'); if(btn) btn.textContent='TEST MIC'
-  const bar = $('mic-test-bar'); if(bar) { bar.style.width='0%'; bar.style.background='#4ade80' }
+  const started = await Comms.toggleMicTest($('mic-test-bar'), () => {
+    if(btn) btn.textContent = 'MIC ACCESS DENIED'
+    setTimeout(()=>{ if(btn) btn.textContent='TEST MIC' }, 2000)
+  })
+  if(started && btn) btn.textContent = 'STOP TEST'
 }
 
 window.toggleMute = () => {
   sfx('click')
-  S.muted = !S.muted
-  if(S.localStream) S.localStream.getAudioTracks().forEach(t=>{t.enabled=!S.muted})
-  // Mute is a master override: force every radio silent regardless of PTT
-  // state, or (on unmute) restore each radio to match whichever PTT keys
-  // are actually still held down right now.
-  for(const [chanId, slot] of Object.entries(S.radioSlots)) {
-    const side = (slot.ear||'left')
-    const wantsToTransmit = !!radioPTTHeld[side] && findRadioOnEar(side)===chanId
-    setRadioTransmitting(chanId, wantsToTransmit) // setRadioTransmitting itself re-checks S.muted
-  }
+  const muted = Comms.toggleMute()
   const btn=$('mute-btn')
-  if(btn) btn.style.color = S.muted?'var(--red)':'var(--hi)'
+  if(btn) btn.style.color = muted?'var(--red)':'var(--hi)'
   const svg=$('mic-svg')
-  if(svg) svg.setAttribute('stroke', S.muted?'#ef4444':getComputedStyle(document.documentElement).getPropertyValue('--hi').trim())
+  if(svg) svg.setAttribute('stroke', muted?'#ef4444':getComputedStyle(document.documentElement).getPropertyValue('--hi').trim())
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// RADIO PUSH-TO-TALK — one key per ear, transmitting only on whichever radio
-// is currently assigned to that ear. Each joined radio gets its own cloned
-// mic track (see joinChannel/txStream below) specifically so the two keys
-// can transmit independently — holding both at once talks on both radios.
-// ════════════════════════════════════════════════════════════════════════════
-let radioPTTListening = null
 window.listenRadioPTTKey = (side) => {
-  if(radioPTTListening) return
-  radioPTTListening = side
   const btn = $(side==='left' ? 'radio-ptt-left-btn' : 'radio-ptt-right-btn')
   if(btn) { btn.textContent='PRESS KEY...'; btn.classList.add('listening') }
-  const handler = (e) => {
-    e.preventDefault()
-    S.radioPTTKeys[side] = e.code
-    if(btn) { btn.textContent=e.key.toUpperCase(); btn.classList.remove('listening') }
-    document.removeEventListener('keydown',handler,true)
-    radioPTTListening = null
-  }
-  document.addEventListener('keydown',handler,true)
+  Comms.listenRadioPTTKey(side, (label) => {
+    if(btn) { btn.textContent=label; btn.classList.remove('listening') }
+  })
 }
-
 window.unbindRadioPTTKey = (side) => {
-  if(radioPTTListening===side) return
-  S.radioPTTKeys[side] = null
-  radioPTTHeld[side] = false
+  Comms.unbindRadioPTTKey(side)
   const btn = $(side==='left' ? 'radio-ptt-left-btn' : 'radio-ptt-right-btn')
   if(btn) btn.textContent = 'UNSET'
 }
 
-// Finds the currently-joined radio (if any) assigned to a given ear
-function findRadioOnEar(side) {
-  for(const chanId of S.activeChanIds) {
-    if((S.radioSlots[chanId]?.ear||'left')===side) return chanId
-  }
-  return null
-}
-
-function setRadioTransmitting(chanId, on) {
-  const slot = S.radioSlots[chanId]
-  if(!slot?.txStream) return
-  // Dead or unconscious operators can't key up, no matter what PTT/mute
-  // state says — gated here so every transmit path (PTT keydown, the
-  // periodic re-check loop, mute toggling) honors it uniformly.
-  const incapacitated = S.self.dead || S.self.uncon
-  const shouldTransmit = on && !S.muted && !incapacitated
-  slot.txStream.getAudioTracks().forEach(t=>{ t.enabled = shouldTransmit })
-  slot.transmitting = shouldTransmit
-  const el = $('radio-slot-'+chanId)
-  if(el) {
-    el.style.boxShadow = shouldTransmit ? '0 0 0 1px var(--green), 0 0 12px rgba(74,222,128,.35)' : ''
-  }
-}
-
-// Cuts any radio currently mid-transmission — used when a player becomes
-// incapacitated (uncon/dead) so an already-held PTT key doesn't keep
-// broadcasting until the next keyup/keydown cycle.
-function silenceAllRadios() {
-  for(const chanId of Object.keys(S.radioSlots)) setRadioTransmitting(chanId, false)
-}
-
-const radioPTTHeld = { left:false, right:false }
-
-document.addEventListener('keydown',e=>{
-  if(radioPTTListening) return
-  const tag = document.activeElement?.tagName
-  if(tag==='INPUT'||tag==='TEXTAREA') return
-  for(const side of ['left','right']) {
-    if(e.code===S.radioPTTKeys[side] && !radioPTTHeld[side]) {
-      radioPTTHeld[side] = true
-      const chanId = findRadioOnEar(side)
-      if(chanId) { sfx('ptt-open'); setRadioTransmitting(chanId, true) }
-    }
-  }
-},true)
-
-document.addEventListener('keyup',e=>{
-  for(const side of ['left','right']) {
-    if(e.code===S.radioPTTKeys[side]) {
-      radioPTTHeld[side] = false
-      const chanId = findRadioOnEar(side)
-      if(chanId) { sfx('ptt-close'); setRadioTransmitting(chanId, false) }
-    }
-  }
-},true)
-
-// ════════════════════════════════════════════════════════════════════════════
-// EAR TEST — plays a tone through the exact same AudioContext/StereoPanner
-// pipeline attachPeerAudio() uses for real net audio, so a working ear test
-// is a genuine guarantee the left/right channel routing itself is functional.
-// ════════════════════════════════════════════════════════════════════════════
 window.testEar = (side) => {
-  const ctx = getAudioCtx()
-  if(ctx.state==='suspended') ctx.resume().catch(()=>{})
-
-  const osc  = ctx.createOscillator()
-  const gain = ctx.createGain()
-  const pan  = ctx.createStereoPanner()
-  osc.type = 'sine'
-  osc.frequency.value = 440
-  pan.pan.value = side==='left' ? -1 : 1
-
-  // Fade in/out so it doesn't click
-  const now = ctx.currentTime
-  gain.gain.setValueAtTime(0, now)
-  gain.gain.linearRampToValueAtTime(0.35, now+0.04)
-  gain.gain.linearRampToValueAtTime(0, now+0.5)
-
-  osc.connect(gain).connect(pan).connect(ctx.destination)
-  osc.start(now)
-  osc.stop(now+0.55)
-
-  // Flash the corresponding button so it's obvious which side just fired,
-  // useful when triggered via keybind rather than a click
-  const btn = $(side==='left' ? 'ear-test-left-btn' : 'ear-test-right-btn')
-  if(btn) {
-    btn.style.borderColor = '#4ade80'
-    btn.style.background = 'rgba(74,222,128,.15)'
-    setTimeout(() => { btn.style.borderColor=''; btn.style.background='' }, 400)
-  }
+  Comms.testEar(side, () => {
+    // Flash the corresponding button so it's obvious which side just fired,
+    // useful when triggered via keybind rather than a click.
+    const btn = $(side==='left' ? 'ear-test-left-btn' : 'ear-test-right-btn')
+    if(btn) {
+      btn.style.borderColor = '#4ade80'
+      btn.style.background = 'rgba(74,222,128,.15)'
+      setTimeout(() => { btn.style.borderColor=''; btn.style.background='' }, 400)
+    }
+  })
 }
-
-let earKeyListening = null
 window.listenEarKey = (side) => {
-  if(earKeyListening) return
-  earKeyListening = side
   const btn = $(side==='left' ? 'ear-left-key-btn' : 'ear-right-key-btn')
   if(btn) { btn.textContent='PRESS KEY...'; btn.classList.add('listening') }
-  const handler = (e) => {
-    e.preventDefault()
-    S.earTestKeys[side] = e.code
-    if(btn) { btn.textContent=e.key.toUpperCase(); btn.classList.remove('listening') }
-    document.removeEventListener('keydown',handler,true)
-    earKeyListening = null
-  }
-  document.addEventListener('keydown',handler,true)
+  Comms.listenEarKey(side, (label) => {
+    if(btn) { btn.textContent=label; btn.classList.remove('listening') }
+  })
 }
-
 window.unbindEarKey = (side) => {
-  if(earKeyListening===side) return
-  S.earTestKeys[side] = null
+  Comms.unbindEarKey(side)
   const btn = $(side==='left' ? 'ear-left-key-btn' : 'ear-right-key-btn')
   if(btn) btn.textContent = 'UNSET'
 }
 
-document.addEventListener('keydown',e=>{
-  if(earKeyListening) return // currently capturing a rebind — don't also fire a test
-  const tag = document.activeElement?.tagName
-  if(tag==='INPUT'||tag==='TEXTAREA') return // don't hijack normal typing
-  if(e.code===S.earTestKeys.left)       { e.preventDefault(); testEar('left') }
-  else if(e.code===S.earTestKeys.right) { e.preventDefault(); testEar('right') }
-},true)
-
-// ─── RADIO / CHANNEL SYSTEM ──────────────────────────────────────────────────
-// S.radioSlots = { chanId: { ear:'left'|'right', gainNode, panNode, stream } }
-// Max 2 channels. Each has independent ear/pan. No audio fighting.
-const MAX_CHANNELS = 2
-if(!S.radioSlots) S.radioSlots = {}
-
-let audioCtx = null
-function getAudioCtx() {
-  if(!audioCtx || audioCtx.state === 'closed') audioCtx = new AudioContext()
-  return audioCtx
-}
-
-// ── LIVE AUDIO DIAGNOSTICS ──────────────────────────────────────────────────
-// Answers "is my audio actually getting to people?" without needing someone
-// else to confirm out loud: a mic-input meter proves the mic itself is
-// picking up sound, and per-peer TX/RX badges (driven by real WebRTC byte
-// counters, not just connection state) prove packets are actively moving in
-// each direction on the live connection right now.
-let micMeterRAF = null, micMeterSource = null, micMeterAnalyser = null
-function startMicMeter(stream) {
-  stopMicMeter()
-  const ctx = getAudioCtx()
-  micMeterAnalyser = ctx.createAnalyser()
-  micMeterAnalyser.fftSize = 512
-  micMeterSource = ctx.createMediaStreamSource(stream)
-  micMeterSource.connect(micMeterAnalyser)
-  const data = new Uint8Array(micMeterAnalyser.frequencyBinCount)
-  const row = $('mic-meter-row'), bar = $('mic-meter-bar')
-  if(row) row.style.display = 'block'
-  const tick = () => {
-    micMeterAnalyser.getByteTimeDomainData(data)
-    let peak = 0
-    for(let i=0;i<data.length;i++) peak = Math.max(peak, Math.abs(data[i]-128))
-    const pct = Math.min(100, (peak/128)*220) // scaled so normal speech reads mid-bar
-    if(bar) { bar.style.width = pct+'%'; bar.style.background = pct>85?'var(--red)':pct>8?'var(--green)':'var(--accent)' }
-    micMeterRAF = requestAnimationFrame(tick)
-  }
-  tick()
-}
-function stopMicMeter() {
-  if(micMeterRAF) cancelAnimationFrame(micMeterRAF)
-  micMeterRAF = null
-  try { micMeterSource?.disconnect() } catch(e){}
-  micMeterSource = null; micMeterAnalyser = null
-  const row = $('mic-meter-row'), bar = $('mic-meter-bar')
-  if(row) row.style.display = 'none'
-  if(bar) bar.style.width = '0%'
-}
-
-// Polls real getStats() byte counters for every active net once a second and
-// stashes the result on each radio slot so renderChanMembers can show a live
-// TX/RX badge next to each connected person.
-setInterval(async () => {
-  if(!S.activeChanIds || !S.activeChanIds.size) return
-  let changed = false
-  for(const chanId of S.activeChanIds) {
-    const slot = S.radioSlots[chanId]
-    if(!slot) continue
-    try {
-      const stats = await getChannelAudioStats(chanId)
-      slot.audioStats = Object.fromEntries(stats.map(s=>[s.peerId,s]))
-      changed = true
-    } catch(e) {}
-  }
-  if(changed) renderChanMembers()
-}, 1000)
-
-// Called when user clicks a net card — handle join/leave/ear-select
-window.handleNetClick = async (chanId) => {
-  if(S.activeChanIds.has(chanId)) {
-    // Already on — leave it
-    leaveChannel(chanId)
-    return
-  }
-  // Check limit
+// Called when user clicks a net card — handle join/leave/ear-select.
+window.handleNetClick = (chanId) => {
   const canMulti = S.member?.canMultiChan || false
-  if(S.activeChanIds.size >= MAX_CHANNELS) {
-    // Max reached — inform user
-    return
-  }
-  if(!canMulti && S.activeChanIds.size >= 1) {
-    // Single-channel role — auto-leave current before joining
-    for(const cid of [...S.activeChanIds]) leaveChannel(cid)
-  }
-
-  // If multi-channel capable and already on one channel — ask which ear
-  if(canMulti && S.activeChanIds.size === 1) {
-    showEarSelector(chanId)
-  } else {
-    // First channel — default left ear
-    await joinChannel(chanId, 'left')
-  }
+  Comms.handleNetClick(chanId, canMulti, showEarSelector)
 }
 
 window.showEarSelector = (chanId) => {
@@ -3988,154 +3734,9 @@ window.showEarSelector = (chanId) => {
   `)
 }
 
-window.joinChannel = async (chanId, ear='left') => {
-  if(S.activeChanIds.has(chanId)) return
-  if(S.activeChanIds.size >= MAX_CHANNELS) return
-
-  // Chrome/Electron suspend a freshly-created AudioContext until it's
-  // resumed from inside a real user gesture. Create + resume it HERE, at
-  // the top of the click handler, rather than waiting until a peer's audio
-  // actually arrives (which happens async, off a network event, and would
-  // get silently blocked — peers connect fine but nobody hears anything).
-  const ctx = getAudioCtx()
-  if(ctx.state === 'suspended') { try { await ctx.resume() } catch(e){} }
-
-  // Get mic stream
-  if(!S.localStream) {
-    const constraints = {
-      audio: {
-        deviceId: S.micDeviceId ? {exact:S.micDeviceId} : undefined,
-        noiseSuppression: $('noise-toggle')?.checked !== false,
-        echoCancellation: true,
-      }
-    }
-    try {
-      S.localStream = await navigator.mediaDevices.getUserMedia(constraints)
-    } catch(e) {
-      openInlineModal('mic-err','<div class="modal-box" style="max-width:320px;border-color:var(--red)" onclick="closeInlineModal(\"mic-err\")"><div class="modal-head"><div class="orb" style="font-size:13px;font-weight:700;color:var(--red)">MIC ACCESS DENIED</div></div><div style="padding:14px 16px;font-size:12px;color:var(--redsoft)">' + e.message + '</div></div>')
-      return
-    }
-    if(S.muted) S.localStream.getAudioTracks().forEach(t=>{ t.enabled=false })
-    startMicMeter(S.localStream)
-  }
-
-  sfx('radio-on')
-  S.activeChanIds.add(chanId)
-
-  // Each radio gets its OWN cloned copy of the mic track (same source,
-  // independently enable-able) so the left/right PTT keys can transmit on
-  // one radio without also keying up the other. Starts silent — radios only
-  // transmit while their assigned PTT key is held.
-  const txStream = new MediaStream(S.localStream.getAudioTracks().map(t => t.clone()))
-  txStream.getAudioTracks().forEach(t => { t.enabled = false })
-
-  S.radioSlots[chanId] = { ear, gainNode:null, panNode:null, peerNodes:new Map(), txStream, transmitting:false, presentUids:[], presenceUnsub:null }
-
-  renderNets()
-  renderActiveRadioSlots()
-  renderChanMembers()
-
-  try {
-    await voiceJoin(S.cardId, chanId, {
-      onPeerStream: (peerId, remoteStream) => attachPeerAudio(chanId, peerId, remoteStream),
-      onPeerLeave:  (peerId) => detachPeerAudio(chanId, peerId),
-    }, txStream)
-
-    // Real per-net roster — who is actually voice-connected to THIS radio
-    // right now, not just "online in the card" (that's a different, much
-    // broader list shown elsewhere).
-    S.radioSlots[chanId].presenceUnsub = listenChannelPresence(S.cardId, chanId, uids => {
-      if(S.radioSlots[chanId]) S.radioSlots[chanId].presentUids = uids
-      renderChanMembers()
-    })
-  } catch(e) {
-    console.error('Voice join failed:', e)
-    // Roll back — don't leave the UI showing "joined" when the underlying
-    // connection never actually happened.
-    S.activeChanIds.delete(chanId)
-    txStream.getTracks().forEach(t=>t.stop())
-    delete S.radioSlots[chanId]
-    renderNets(); renderActiveRadioSlots(); renderChanMembers()
-    openInlineModal('voice-err','<div class="modal-box" style="max-width:320px;border-color:var(--red)" onclick="closeInlineModal(\"voice-err\")"><div class="modal-head"><div class="orb" style="font-size:13px;font-weight:700;color:var(--red)">VOICE CONNECTION FAILED</div></div><div style="padding:14px 16px;font-size:12px;color:var(--redsoft)">Could not connect to this net. Check your connection and try again.</div></div>')
-  }
-}
-
-// Route one peer's incoming audio through a per-peer gain/pan node so ear
-// (left/right) routing works even with multiple people on the same net.
-function attachPeerAudio(chanId, peerId, remoteStream) {
-  const slot = S.radioSlots[chanId]
-  if(!slot) return
-  const ctx = getAudioCtx()
-  if(ctx.state === 'suspended') ctx.resume().catch(()=>{}) // belt-and-suspenders vs. autoplay blocking
-  const source = ctx.createMediaStreamSource(remoteStream)
-  const gain   = ctx.createGain()
-  const pan    = ctx.createStereoPanner()
-  gain.gain.value = (S.radioVolume??100)/100
-  pan.pan.value = slot.ear === 'left' ? -1 : 1
-  source.connect(gain).connect(pan).connect(ctx.destination)
-  slot.peerNodes.set(peerId, { source, gain, pan, stream:remoteStream })
-}
-
-// Called the instant a peer's presence disappears (they left, crashed, or
-// dropped) — cleans up just that one peer's audio without tearing down the
-// whole channel.
-function detachPeerAudio(chanId, peerId) {
-  const slot = S.radioSlots[chanId]
-  const nodes = slot?.peerNodes.get(peerId)
-  if(!nodes) return
-  try { nodes.source.disconnect() } catch(e){}
-  try { nodes.gain.disconnect() } catch(e){}
-  try { nodes.pan.disconnect() } catch(e){}
-  slot.peerNodes.delete(peerId)
-}
-
-function detachChannelAudio(chanId) {
-  const slot = S.radioSlots[chanId]
-  if(!slot) return
-  for(const { source, gain, pan } of slot.peerNodes.values()) {
-    try { source.disconnect() } catch(e){}
-    try { gain.disconnect() } catch(e){}
-    try { pan.disconnect() } catch(e){}
-  }
-  slot.peerNodes.clear()
-}
-
-window.leaveChannel = (chanId) => {
-  sfx('radio-off')
-  S.activeChanIds.delete(chanId)
-  // Cleanup audio nodes
-  if(S.radioSlots[chanId]) {
-    detachChannelAudio(chanId)
-    try { S.radioSlots[chanId].gainNode?.disconnect() } catch(e){}
-    try { S.radioSlots[chanId].panNode?.disconnect() } catch(e){}
-    try { S.radioSlots[chanId].presenceUnsub?.() } catch(e){}
-    S.radioSlots[chanId].txStream?.getTracks().forEach(t=>t.stop())
-    delete S.radioSlots[chanId]
-  }
-  voiceLeave(S.cardId, chanId).catch(e => console.error('Voice leave failed:', e))
-  // If no channels left, stop mic stream
-  if(S.activeChanIds.size === 0 && S.localStream) {
-    S.localStream.getTracks().forEach(t=>t.stop())
-    S.localStream = null
-    stopMicMeter()
-  }
-  renderNets()
-  renderActiveRadioSlots()
-  renderChanMembers()
-}
-
-window.switchEar = async (chanId, newEar) => {
-  if(!S.radioSlots[chanId]) return
-  S.radioSlots[chanId].ear = newEar
-  renderActiveRadioSlots()
-  // Re-apply panning to audio node if connected
-  if(S.radioSlots[chanId].panNode) {
-    S.radioSlots[chanId].panNode.pan.value = newEar === 'left' ? -1 : 1
-  }
-  for(const { pan } of S.radioSlots[chanId].peerNodes.values()) {
-    pan.pan.value = newEar === 'left' ? -1 : 1
-  }
-}
+window.joinChannel = (chanId, ear='left') => Comms.joinChannel(chanId, ear)
+window.leaveChannel = (chanId) => Comms.leaveChannel(chanId)
+window.switchEar = (chanId, newEar) => Comms.switchEar(chanId, newEar)
 
 function renderActiveRadioSlots() {
   const el = $('active-radio-slots')

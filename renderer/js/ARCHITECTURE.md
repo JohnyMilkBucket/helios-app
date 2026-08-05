@@ -130,16 +130,18 @@ own lifecycle:
 
 ## What does *not* need this treatment
 
-Not every piece of state is a race risk. `renderer/js/voice.js` and the
-comms/PTT code in `index.html` were audited for this same bug class and
-found clean: live radio/PTT state (`S.radioSlots`, `S.activeChanIds`) is
-**never written to Firestore** — it's pure client-local UI/WebRTC state, so
-there's no listener to race against. Forcing it into the same
-single-writer-module shape as medical/roles/ORBAT would add an artificial
-boundary without removing any actual risk, since the risk this pattern
-guards against doesn't exist there. Only reach for this pattern when a
-feature has local state that's *also* being kept in sync with a Firestore
-listener — that's the specific shape that broke.
+Not every piece of state is a race risk. `renderer/js/voice.js` and
+`renderer/js/comms.js` (channel join/leave, PTT, ear routing, mic device +
+test — extracted from `index.html` for the same file-per-feature
+organization the other systems have, not because it had this bug) were
+audited for this same bug class and found clean: live radio/PTT state
+(`radioSlots`, `activeChanIds`) is **never written to Firestore** — it's
+pure client-local UI/WebRTC state, so there's no listener to race against.
+Forcing it into the same single-writer-module shape as medical/roles/ORBAT
+would add an artificial boundary without removing any actual risk, since
+the risk this pattern guards against doesn't exist there. Only reach for
+this pattern when a feature has local state that's *also* being kept in
+sync with a Firestore listener — that's the specific shape that broke.
 
 ## Checklist for adding a new feature area
 
