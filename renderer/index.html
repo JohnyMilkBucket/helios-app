@@ -1394,6 +1394,11 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.6', items:[
+    'Mobile companion is now installable as a real app (add to home screen, Android + iOS).',
+    'Mobile companion can alert you (sound + notification) on down/death, unconscious, tourniquet-too-long, or new casualties — opt-in via "Enable Alerts."',
+    'Operations tab shows roster size on every op now, archived ops are clearly labeled, and mobile has a "Past Operations" history.',
+  ]},
   { v:'1.4.5', items:[
     'Added a mobile web companion (helios-app-c803f.web.app) — same account, no install. Check roster/ops/casualties and treat patients from a phone. Comms/ORBAT/roles/admin stay desktop-only for now.',
   ]},
@@ -2616,10 +2621,12 @@ function renderOps() {
     <div class="panel" style="padding:13px 14px;margin-bottom:8px;${op.status==='active'?'border-color:#5b8bb5':''}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div style="flex:1;min-width:0">
-          ${op.status==='active'?`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="dot" style="background:var(--green);animation:bpulse 2s ease-in-out infinite"></span><span style="font-size:9px;letter-spacing:.3em;color:var(--green)">ACTIVE</span></div>`:''}
+          ${op.status==='active'
+            ?`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="dot" style="background:var(--green);animation:bpulse 2s ease-in-out infinite"></span><span style="font-size:9px;letter-spacing:.3em;color:var(--green)">ACTIVE</span></div>`
+            :`<div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:4px">ARCHIVED</div>`}
           <div class="orb" style="font-size:14px;font-weight:700;letter-spacing:.1em;margin-bottom:3px">${op.name}</div>
           <div style="font-size:11px;color:#a8b8cc;margin-bottom:8px;line-height:1.5">${op.objective||''}</div>
-          <div style="font-size:9px;color:var(--accent)">${op.createdAt?.toDate?.().toLocaleDateString()||''}</div>
+          <div style="font-size:9px;color:var(--accent)">${op.createdAt?.toDate?.().toLocaleDateString()||''} · ${op.rosterCount||0} ROSTERED</div>
         </div>
         ${S.member?.isAdmin||S.member?.canCreateOps ? `
           <button class="btn" onclick="archiveOp('${op.id}')" style="font-size:9px;padding:4px 8px;flex-shrink:0;display:${op.status==='active'?'block':'none'}">ARCHIVE</button>

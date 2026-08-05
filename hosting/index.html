@@ -4,6 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <title>HELIOS MOBILE</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<meta name="theme-color" content="#060d1a"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Helios"/>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -134,7 +141,11 @@ button{font-family:inherit;cursor:pointer}
       <div class="cardname" id="app-cardname">—</div>
       <div class="sub" id="app-username">—</div>
     </div>
-    <button class="btn" onclick="doLogout()" style="font-size:9px;padding:8px 10px">LOGOUT</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-amber" id="alerts-btn" onclick="enableAlerts()" style="font-size:9px;padding:8px 10px">ENABLE ALERTS</button>
+      <button class="btn btn-blue hidden" id="install-btn" onclick="doInstall()" style="font-size:9px;padding:8px 10px">INSTALL APP</button>
+      <button class="btn" onclick="doLogout()" style="font-size:9px;padding:8px 10px">LOGOUT</button>
+    </div>
   </div>
   <div id="main">
     <div id="view-dashboard"></div>
@@ -150,7 +161,7 @@ button{font-family:inherit;cursor:pointer}
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, query, where }
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, query, where, orderBy, limit }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 import * as Medical from './js/medical.js'
 
@@ -176,6 +187,43 @@ const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:
 const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST'}
 
 const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], self:Medical.getSelf(), patients:[], listeners:[] }
+
+// ── ALERTS (sound + notification) ────────────────────────────────────────
+// Fires while this page is open (foreground or backgrounded tab) — this is
+// the Notification API, not true push-while-closed. A real "alert even
+// with the app fully closed" would need Firebase Cloud Messaging + VAPID
+// keys, which is a separate, bigger integration.
+let audioCtx = null
+function playAlertTone() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)()
+    const now = audioCtx.currentTime
+    ;[0, 0.18].forEach(delay => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain()
+      o.connect(g); g.connect(audioCtx.destination)
+      o.type = 'square'; o.frequency.setValueAtTime(880, now+delay)
+      g.gain.setValueAtTime(0.25, now+delay)
+      g.gain.exponentialRampToValueAtTime(0.001, now+delay+0.15)
+      o.start(now+delay); o.stop(now+delay+0.16)
+    })
+  } catch(e) {}
+}
+function alertUser(title, body) {
+  playAlertTone()
+  if (window.Notification && Notification.permission === 'granted') {
+    try { new Notification(title, { body, icon: 'icons/icon-192.png' }) } catch(e) {}
+  }
+}
+window.enableAlerts = async () => {
+  if (!window.Notification) return
+  const perm = await Notification.requestPermission()
+  $('alerts-btn')?.classList.toggle('hidden', perm !== 'default')
+  if (perm === 'granted') playAlertTone()
+}
+// Hide the button entirely once a decision (either way) has already been made.
+if (!window.Notification || Notification.permission !== 'default') {
+  document.addEventListener('DOMContentLoaded', () => $('alerts-btn')?.classList.add('hidden'))
+}
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
 window.toggleAuthMode = () => {
@@ -254,8 +302,11 @@ async function enterCard(cardId) {
 
   Medical.initMedical(db, cardId, S.user.uid, {
     onSelfChange: () => renderMedicalView(),
-    onPatientsChange: () => renderMedicalView(),
-    onSelfDied: () => renderMedicalView(),
+    onPatientsChange: (patients, info) => {
+      renderMedicalView()
+      if (info.newCasualty && (S.member?.canTreatOthers || S.member?.isAdmin)) alertUser('NEW CASUALTY', 'Someone on your roster needs treatment.')
+    },
+    onSelfDied: () => { renderMedicalView(); alertUser('YOU DIED', DEATH_LABEL[S.self.deathCause] || 'Medical emergency') },
   })
   Medical.syncInventory(S.member.inv||{})
   Medical.startMedicalTickers({
@@ -263,10 +314,10 @@ async function enterCard(cardId) {
     onBloodTick: () => renderMedicalView(),
     onOdTick: () => renderMedicalView(),
     onBleedOut: () => renderMedicalView(),
-    onKnockedOut: () => renderMedicalView(),
+    onKnockedOut: () => { renderMedicalView(); alertUser('UNCONSCIOUS', 'Blood loss knocked you out — you need a medic.') },
     onCardiacArrest: () => renderMedicalView(),
     onLimbLost: () => renderMedicalView(),
-    onLimbNumb: () => renderMedicalView(),
+    onLimbNumb: () => alertUser('LIMB NUMB', 'A tourniquet has been on too long — circulation is going.'),
   })
 
   S.listeners.push(onSnapshot(collection(db,'cards',cardId,'members'), snap => {
@@ -275,10 +326,13 @@ async function enterCard(cardId) {
     if(me) { S.member = me; Medical.syncInventory(me.inv||{}) }
     renderDashboard(); renderMedicalView()
   }))
-  S.listeners.push(onSnapshot(collection(db,'cards',cardId,'operations'), snap => {
-    S.ops = snap.docs.map(d=>({id:d.id,...d.data()})).filter(o=>o.status==='active')
-    renderDashboard()
-  }))
+  S.listeners.push(onSnapshot(
+    query(collection(db,'cards',cardId,'operations'), orderBy('createdAt','desc'), limit(6)),
+    snap => {
+      S.ops = snap.docs.map(d=>({id:d.id,...d.data()}))
+      renderDashboard()
+    }
+  ))
 
   switchView('dashboard')
 }
@@ -305,7 +359,8 @@ window.switchView = (v) => {
 function renderDashboard() {
   const el = $('view-dashboard')
   if(!S.cardId) return
-  const activeOp = S.ops[0]
+  const activeOp = S.ops.find(o=>o.status==='active')
+  const pastOps = S.ops.filter(o=>o.status!=='active').slice(0,5)
   const online = S.members.filter(m=>m.online).length
   const patients = Medical.getPatients()
   el.innerHTML = `
@@ -317,6 +372,15 @@ function renderDashboard() {
            <div style="font-size:10px;color:var(--accent);margin-top:6px">${activeOp.rosterCount||0} ROSTERED</div>`
         : `<div style="font-size:11px;color:var(--accent)">No active operation</div>`}
     </div>
+    ${pastOps.length ? `
+    <div class="panel">
+      <div class="label">PAST OPERATIONS</div>
+      ${pastOps.map(op=>`
+        <div class="roster-row">
+          <span>${op.name}</span>
+          <span style="color:var(--accent)">${op.rosterCount||0} rostered · ${op.createdAt?.toDate?.().toLocaleDateString()||''}</span>
+        </div>`).join('')}
+    </div>` : ''}
     <div class="panel">
       <div class="label">ROSTER — ${online}/${S.members.length} ONLINE</div>
       ${S.members.map(m=>`
@@ -333,7 +397,7 @@ function renderDashboard() {
           <span style="color:${p.dead?'#94a3b8':'var(--redsoft)'}">${p.dead?(DEATH_LABEL[p.deathCause]||'DECEASED'):p.uncon?'UNCONSCIOUS':'DOWN'}</span>
         </div>`).join('') : '<div style="font-size:11px;color:var(--accent)">No active casualties</div>'}
     </div>
-    <div class="notice">Full comms, ORBAT, roles, and admin tools are available on the desktop app.</div>
+    <div class="notice">Full comms, ORBAT, roles, and admin tools are available on the desktop app.<br>iPhone: add this to your home screen via Share &rarr; Add to Home Screen.</div>
   `
 }
 
@@ -467,6 +531,25 @@ onAuthStateChanged(auth, async user => {
   show('screen-cards')
   renderCardsList()
 })
+
+// ── PWA: install prompt + service worker ─────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}))
+}
+let deferredInstallPrompt = null
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault()
+  deferredInstallPrompt = e
+  $('install-btn').classList.remove('hidden')
+})
+window.doInstall = async () => {
+  if (!deferredInstallPrompt) return
+  deferredInstallPrompt.prompt()
+  await deferredInstallPrompt.userChoice
+  deferredInstallPrompt = null
+  $('install-btn').classList.add('hidden')
+}
+window.addEventListener('appinstalled', () => $('install-btn')?.classList.add('hidden'))
 </script>
 </body>
 </html>

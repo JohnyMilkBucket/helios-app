@@ -3,6 +3,17 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.6
+- Mobile companion is now installable as a real app (add to home screen,
+  works on Android and iOS).
+- Mobile companion can show sound + browser alerts while open — you're
+  marked down/die, get knocked unconscious, a tourniquet's been on too
+  long, or (for medics) a new casualty appears. Opt-in via an "Enable
+  Alerts" button.
+- Operations tab (desktop + mobile) now shows roster size on every op, and
+  archived ops are clearly labeled instead of just losing their ACTIVE
+  badge. Mobile dashboard now also shows a short "Past Operations" history.
+
 ## v1.4.5
 - Added a mobile web companion at helios-app-c803f.web.app — same account,
   same card, no install. Check the roster, active operation, and
