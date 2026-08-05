@@ -32,6 +32,11 @@ const C = {
   spkDeviceId: null,
   radioVolume: 100,
   radioPTTKeys: { left: 'BracketLeft', right: 'BracketRight' },
+  // Human-readable labels for the keys above — kept in sync alongside
+  // radioPTTKeys (see listenRadioPTTKey/unbindRadioPTTKey) so the "HOLD X TO
+  // TRANSMIT" hint on the active-radio-slots panel reflects whatever the
+  // player actually rebound, instead of always showing the [ / ] defaults.
+  radioPTTKeyLabels: { left: '[', right: ']' },
   earTestKeys: { left: null, right: null },
 }
 const radioPTTHeld = { left: false, right: false }
@@ -50,6 +55,7 @@ export function getActiveChanIds() { return C.activeChanIds }
 export function getRadioSlots() { return C.radioSlots }
 export function getMuted() { return C.muted }
 export function getRadioPTTKeys() { return C.radioPTTKeys }
+export function getRadioPTTKeyLabels() { return C.radioPTTKeyLabels }
 export function getEarTestKeys() { return C.earTestKeys }
 
 // hooks: { onChange(), isIncapacitated(), sfx(name), callout(text),
@@ -73,7 +79,14 @@ export function initComms(cardIdArg, hooksArg) {
         changed = true
       } catch (e) {}
     }
-    if (changed) hooks.onChange?.()
+    // Deliberately a separate hook from onChange: this fires every second
+    // just to refresh TX/RX badges in the members list. onChange also
+    // re-renders the active-radio-slots panel from scratch, which would
+    // wipe out the transmitting-state glow that setRadioTransmitting sets
+    // directly on that element via onTransmitChange — the two used to be
+    // rendered on completely independent triggers before this module
+    // existed, and need to stay that way.
+    if (changed) hooks.onStatsChange?.()
   }, 1000)
 
   document.addEventListener('keydown', e => {
@@ -247,6 +260,7 @@ export function listenRadioPTTKey(side, onBound) {
   const handler = (e) => {
     e.preventDefault()
     C.radioPTTKeys[side] = e.code
+    C.radioPTTKeyLabels[side] = e.key.toUpperCase()
     document.removeEventListener('keydown', handler, true)
     radioPTTListening = null
     onBound?.(e.key.toUpperCase())
@@ -257,6 +271,7 @@ export function listenRadioPTTKey(side, onBound) {
 export function unbindRadioPTTKey(side) {
   if (radioPTTListening===side) return
   C.radioPTTKeys[side] = null
+  C.radioPTTKeyLabels[side] = null
   radioPTTHeld[side] = false
 }
 
@@ -406,7 +421,10 @@ export async function joinChannel(chanId, ear='left') {
     // broader list shown elsewhere).
     C.radioSlots[chanId].presenceUnsub = listenChannelPresence(cardId, chanId, uids => {
       if (C.radioSlots[chanId]) C.radioSlots[chanId].presentUids = uids
-      hooks.onChange?.()
+      // Only the members list depends on presentUids — same reasoning as
+      // the getStats poll above, this must not re-render the active-slots
+      // panel and stomp an in-progress transmit glow.
+      hooks.onStatsChange?.()
     })
   } catch (e) {
     console.error('Voice join failed:', e)

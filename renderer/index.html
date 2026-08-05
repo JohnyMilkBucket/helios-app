@@ -1950,6 +1950,11 @@ function subscribeAll(cardId) {
   // functions and error-modal builders.
   Comms.initComms(cardId, {
     onChange: () => { renderNets(); renderActiveRadioSlots(); renderChanMembers() },
+    // Fires every second (getStats poll) and on presence changes — must
+    // NOT touch renderActiveRadioSlots, which would rebuild the DOM node
+    // onTransmitChange sets its glow on directly and stomp an in-progress
+    // transmit indicator a second or two after it lit up.
+    onStatsChange: () => renderChanMembers(),
     isIncapacitated: () => S.self.dead || S.self.uncon,
     sfx: (name) => sfx(name),
     noiseSuppressionEnabled: () => $('noise-toggle')?.checked !== false,
@@ -3652,12 +3657,14 @@ window.listenRadioPTTKey = (side) => {
   if(btn) { btn.textContent='PRESS KEY...'; btn.classList.add('listening') }
   Comms.listenRadioPTTKey(side, (label) => {
     if(btn) { btn.textContent=label; btn.classList.remove('listening') }
+    renderActiveRadioSlots() // so an already-open "HOLD X TO TRANSMIT" hint updates live
   })
 }
 window.unbindRadioPTTKey = (side) => {
   Comms.unbindRadioPTTKey(side)
   const btn = $(side==='left' ? 'radio-ptt-left-btn' : 'radio-ptt-right-btn')
   if(btn) btn.textContent = 'UNSET'
+  renderActiveRadioSlots()
 }
 
 window.testEar = (side) => {
@@ -3780,7 +3787,7 @@ function renderActiveRadioSlots() {
         </button>
       </div>
       <div style="font-size:8px;color:var(--accent);text-align:center;margin-top:6px;letter-spacing:.1em">
-        HOLD <b style="color:${earColor}">${ear==='left'?'[':']'}</b> TO TRANSMIT
+        HOLD <b style="color:${earColor}">${Comms.getRadioPTTKeyLabels()[ear] || 'UNSET'}</b> TO TRANSMIT
       </div>
       ${slots.length<MAX_CHANNELS && canMulti ? `
         <div style="font-size:8px;color:var(--accent);text-align:center;margin-top:5px">SLOT ${slots.indexOf(chanId)+1} / ${MAX_CHANNELS}</div>
