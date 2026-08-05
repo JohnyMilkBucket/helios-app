@@ -1919,6 +1919,7 @@ function subscribeAll(cardId) {
 
   // Own medical record
   S.listeners.push(onSnapshot(doc(db,'medical',cardId,'patients',S.user.uid), snap => {
+    console.log('[HELIOS DEBUG] own-record onSnapshot FIRED, fromCache=', snap.metadata.fromCache, 'hasPendingWrites=', snap.metadata.hasPendingWrites, 'exists=', snap.exists(), 'zones=', JSON.stringify(snap.data()?.zones), 'BEFORE this fire S.self.zones was=', JSON.stringify(S.self.zones))
     if(snap.exists()) {
       const d = snap.data()
       const wasDead = S.self.dead
@@ -3535,6 +3536,7 @@ function applyDepressantTo(obj) {
 
 async function finishApply(a) {
   const {zone,treatment,target,patientId} = a
+  console.log('[HELIOS DEBUG] finishApply ENTER', JSON.stringify(a), 'S.cardId=', S.cardId, 'S.user.uid=', S.user?.uid)
   const isSelf = target!=='patient'
   const patient = isSelf ? null : S.patients.find(p=>p.id===patientId)
   const targetObj = isSelf ? S.self : patient
@@ -3543,6 +3545,7 @@ async function finishApply(a) {
     const zs = targetObj?.zones?.[zone]
     applyBandageToZone(zs)
     S.self.inv.bandage = Math.max(0,(S.self.inv.bandage||0)-1)
+    console.log('[HELIOS DEBUG] after local bandage mutation, S.self.zones[zone]=', JSON.stringify(S.self.zones[zone]))
   } else if(treatment==='tourniquet'&&LIMBS.includes(zone)) {
     if(targetObj) {
       if(!targetObj.zones[zone]) targetObj.zones[zone]=freshZone()
@@ -3592,7 +3595,9 @@ async function finishApply(a) {
       if(treatment==='stim' || treatment==='depressant') upd.hr = S.self.hr
       if(treatment==='stim' || treatment==='depressant') { upd.overdosing=S.self.overdosing; upd.odStacks=S.self.odStacks }
       if(treatment==='stim') { upd.uncon=S.self.uncon; upd.dead=S.self.dead }
+      console.log('[HELIOS DEBUG] about to setDoc, path=', 'medical/'+S.cardId+'/patients/'+S.user.uid, 'upd=', JSON.stringify(upd))
       await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid), upd, {merge:true})
+      console.log('[HELIOS DEBUG] setDoc RESOLVED without throwing')
     } else if(patient) {
       const upd = { [`zones.${zone}`]: patient.zones[zone], updatedAt:serverTimestamp() }
       if(treatment==='blood') upd.bloodPct = patient.bloodPct
