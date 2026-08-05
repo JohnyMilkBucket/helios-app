@@ -1208,7 +1208,7 @@ html.popout-mode #content{padding:10px 12px}
           🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before the bleeding actually stops — keep bandaging until it does. 5s per try, 15s if fragmentation is present.<br>
           🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only, never head/torso. Stops bleeding instantly (3s to apply). It doesn't numb the limb right away — past ~4 minutes it goes numb and becomes unusable (see INCAPACITATION below, you'll get a callout when it happens), and past ~6 minutes you lose the limb entirely.<br>
           🦴 <b style="color:#a78bfa">Splint</b> — Fixes a fracture. 6s.<br>
-          ⚡ <b style="color:var(--purple)">Stimulant</b> — Safe wake-up on an unconscious patient. On a conscious patient it's an overdose: heart rate spikes to 200-250 and each dose taken while already spiked adds +2% risk of cardiac death (stacking). 3s.<br>
+          ⚡ <b style="color:var(--purple)">Stimulant</b> — Safe wake-up on an unconscious patient. On a conscious patient it's an overdose: heart rate jumps to 200 and climbs about 3 bpm/sec from there — roughly 30 seconds to cardiac arrest at 280. A second dose taken while already overdosing doesn't restart the climb, it speeds it up. Only a depressant stops it. 3s.<br>
           💧 <b style="color:var(--blue)">Depressant</b> — Normally just lowers heart rate. If the patient is currently overdosing on stims, it clears the overdose outright instead. 3s.<br>
           🩸 <b style="color:var(--red)">Blood Bag</b> — Restores 40% blood volume. 10s. Medic item.
         </div>
@@ -3192,7 +3192,7 @@ window.openTreat = (zone, target='self') => {
 
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
-    : { zones:S.self.zones, inv:S.self.inv, uncon:S.self.uncon, dead:S.self.dead }
+    : { zones:S.self.zones, inv:S.self.inv, uncon:S.self.uncon, dead:S.self.dead, overdosing:S.self.overdosing, odStacks:S.self.odStacks }
 
   if(!patient) return
 
@@ -3263,7 +3263,7 @@ window.openTreat = (zone, target='self') => {
       : {id:'tourniquet', label:'TOURNIQUET', color:'#fbbf24', timeSec:3, desc:isLimb?'Fast stop — 3s':'❌ LIMBS ONLY', locked:!isLimb},
     {id:'splint', label:'SPLINT', color:'#a78bfa', timeSec:6, desc:s?.fracture?'Fix fracture — 6s':'❌ NO FRACTURE', locked:!s?.fracture},
     {id:'stim',       label:'STIMULANT',  color:'#a78bfa', timeSec:3,
-      desc: !patient.uncon ? `⚠ HR→200+ · ${Math.min(100,2*((patient.odStacks||0)+1))}% death risk` : 'Wake patient — 3s'},
+      desc: !patient.uncon ? (patient.overdosing ? '⚠ HR climbing — ANOTHER dose speeds it up' : '⚠ HR→200, climbs to cardiac arrest') : 'Wake patient — 3s'},
     {id:'depressant', label:'DEPRESSANT', color:'#60a5fa', timeSec:3, desc: patient.overdosing?'Clears OD — 3s':'Lower HR — 3s'},
     {id:'blood',      label:'BLOOD BAG',  color:'#dc2626', timeSec:10,desc:'Restore +40% — 10s'},
   ]
@@ -3475,15 +3475,18 @@ function startTickers() {
       if(bv){bv.textContent='0%';bv.style.color='#6b7280'}
       return
     }
-    let base=78
-    if(S.self.down) base=S.self.uncon?145:110
-    if(S.self.bloodPct<40) base+=32
-    else if(S.self.bloodPct<70) base+=16
-    // Stim overdose overrides everything else — heart rate sits pinned in
-    // the 200-250 danger band until a depressant clears it.
-    if(S.self.overdosing) base=225
-    const hrCap = S.self.overdosing ? 250 : 220
-    S.self.hr = Math.round(Math.max(38,Math.min(hrCap, base+(Math.random()-.5)*6+(S.self.hr-base)*0.28)))
+    // During an overdose, HR is owned entirely by the ramp ticker in
+    // medical.js (climbing toward cardiac arrest) — this ticker only
+    // renders it in that state instead of also computing/drifting it, so
+    // the two never fight over the same field the way the old inline
+    // listener and treatment writes once did.
+    if(!S.self.overdosing) {
+      let base=78
+      if(S.self.down) base=S.self.uncon?145:110
+      if(S.self.bloodPct<40) base+=32
+      else if(S.self.bloodPct<70) base+=16
+      S.self.hr = Math.round(Math.max(38,Math.min(220, base+(Math.random()-.5)*6+(S.self.hr-base)*0.28)))
+    }
     const pSec=(60/Math.max(20,S.self.hr)).toFixed(2)
     const hC = S.self.overdosing?'#dc2626':S.self.down?'#ef4444':'#4ade80'
     const vC = S.self.bloodPct<40?'#dc2626':S.self.down?'#fbbf24':'#4ade80'
@@ -3509,6 +3512,8 @@ function startTickers() {
     onLimbNumb: (z) => { sfx('alert'); callout(`${ZONE_SPEECH[z]} unusable, tourniquet`) },
     onBleedOut: () => { sfx('alert'); silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
     onKnockedOut: () => { sfx('alert'); silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
+    onOdTick: () => updateBodyFigure(),
+    onCardiacArrest: () => { sfx('alert'); silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
   })
 }
 

@@ -59,6 +59,19 @@ export const LIMBS = ['l_arm','r_arm','l_leg','r_leg']
 export const TQ_WARN_MS = 4*60*1000
 export const TQ_LOSS_MS = 6*60*1000
 
+// Stim overdose — one dose kicks HR up to OD_START_HR and it climbs
+// OD_CLIMB_RATE bpm/sec from there (checked once per second by the ramp
+// ticker in startMedicalTickers) until it crosses OD_ARREST_HR, which is
+// cardiac arrest. At the base rate that's OD_START_HR to OD_ARREST_HR in
+// ~27s. Each additional dose taken while already overdosing doesn't restart
+// the ramp from OD_START_HR — it stacks onto odStacks, which multiplies the
+// climb rate (OD_STACK_MULT extra per stack beyond the first), so stacking
+// doses makes arrest arrive faster, not just "sooner started."
+export const OD_START_HR = 200
+export const OD_ARREST_HR = 280
+export const OD_CLIMB_RATE = 3
+export const OD_STACK_MULT = 0.5
+
 // ── PURE TRANSITION FUNCTIONS ────────────────────────────────────────────
 // These mutate the zone/target object passed in (matching the original
 // inline behavior exactly) rather than returning a new one — callers always
@@ -96,20 +109,20 @@ export function removeTourniquetFromZone(zs) {
   zs.bleeding = zs.bandaged ? false : !!zs.inj
 }
 
-// Unconscious -> stim wakes them up clean, no risk. Conscious -> stim is an
-// overdose: heart rate spikes into the 200-250 danger band, and every
-// additional dose taken while still in that band stacks another +2% on top
-// of the running chance of cardiac death (rolled on that dose).
+// Unconscious -> stim wakes them up clean, no risk. Conscious -> stim starts
+// (or stacks onto) an overdose: HR jumps to OD_START_HR on the first dose,
+// then climbs every second via the ramp ticker in startMedicalTickers until
+// it crosses OD_ARREST_HR — cardiac arrest, not an instant roll. A second
+// dose taken while already overdosing doesn't re-jump HR back down to
+// OD_START_HR (it's already above that) — it just adds to odStacks, which
+// the ticker uses to climb faster.
 export function applyStimTo(obj) {
   if(obj.uncon) {
     obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95
   } else {
     obj.odStacks=(obj.odStacks||0)+1
+    if(!obj.overdosing) obj.hr=OD_START_HR
     obj.overdosing=true
-    obj.hr=200+Math.floor(Math.random()*51) // 200-250
-    if(Math.random() < Math.min(1, 0.02*obj.odStacks)) {
-      obj.dead=true; obj.uncon=true; obj.overdosing=false; obj.hr=0
-    }
   }
 }
 
@@ -413,6 +426,30 @@ export function startMedicalTickers(hooks) {
       if(Math.random()<0.2) {
         await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{bloodPct:M.self.bloodPct,hr:M.self.hr,updatedAt:serverTimestamp()},{merge:true})
       }
+    }
+  }, 1000)
+
+  // Stim overdose ramp — HR climbs OD_CLIMB_RATE bpm/sec (faster per extra
+  // stacked dose, see OD_STACK_MULT) until it crosses OD_ARREST_HR.
+  setInterval(async () => {
+    if(!M.cardId || !M.self.down || M.self.dead || !M.self.overdosing) return
+    const rate = OD_CLIMB_RATE * (1 + OD_STACK_MULT*Math.max(0,(M.self.odStacks||1)-1))
+    M.self.hr = Math.min(OD_ARREST_HR, M.self.hr + rate)
+    hooks.onOdTick?.(M.self)
+
+    if(M.self.hr >= OD_ARREST_HR) {
+      // Cardiac arrest — only a revive can bring them back, same as bleeding out.
+      M.self.dead = true; M.self.uncon = true; M.self.overdosing = false
+      hooks.onCardiacArrest?.()
+      await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
+        hr:OD_ARREST_HR, dead:true, uncon:true, overdosing:false, updatedAt:serverTimestamp()
+      },{merge:true})
+      return
+    }
+
+    // Sync every ~3s so a medic watching this patient sees HR actually rising.
+    if(Math.random()<0.33) {
+      await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{hr:M.self.hr,updatedAt:serverTimestamp()},{merge:true})
     }
   }, 1000)
 }
