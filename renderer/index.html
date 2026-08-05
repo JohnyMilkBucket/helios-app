@@ -1332,6 +1332,13 @@ import {
   applyRoleChange as roleApplyChange,
 } from './js/roles.js'
 
+// ── ORBAT ───────────────────────────────────────────────────────────────────
+import {
+  getSubUnitList, createUnit as orbatCreateUnit, deleteUnit as orbatDeleteUnit,
+  createSubUnit as orbatCreateSubUnit, deleteSubUnit as orbatDeleteSubUnit,
+  assignMember as orbatAssignMember, unassignMember as orbatUnassignMember,
+} from './js/orbat.js'
+
 // ── INIT ──────────────────────────────────────────────────────────────────
 const firebaseApp = initializeApp(FIREBASE_CONFIG)
 const auth = getAuth(firebaseApp)
@@ -1992,7 +1999,7 @@ function renderORBAT() {
   // Unassigned members
   const assignedUids = new Set()
   S.units.forEach(u => {
-    (u.subUnits||[]).forEach(s => {
+    getSubUnitList(u).forEach(s => {
       (s.members||[]).forEach(uid => assignedUids.add(uid))
     })
     ;(u.directMembers||[]).forEach(uid => assignedUids.add(uid))
@@ -2023,7 +2030,7 @@ function renderORBAT() {
         <div style="width:4px;height:36px;background:${u.color||'#8db3d4'};flex-shrink:0"></div>
         <div style="flex:1">
           <div class="orb" style="font-size:13px;font-weight:700;color:${u.color||'#e8eef5'};letter-spacing:.1em">${u.name}</div>
-          <div style="font-size:9px;color:var(--accent);margin-top:2px">${(u.subUnits||[]).length} SUB-UNITS · ${directMembers.length} DIRECT</div>
+          <div style="font-size:9px;color:var(--accent);margin-top:2px">${getSubUnitList(u).length} SUB-UNITS · ${directMembers.length} DIRECT</div>
         </div>
         ${S.member?.isAdmin ? `
           <button onclick="showAssignMember('${u.id}',null)" class="btn" style="font-size:9px;padding:3px 8px">+ ASSIGN</button>
@@ -2044,8 +2051,8 @@ function renderORBAT() {
 
       <!-- Sub-units -->
       <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
-        ${!(u.subUnits||[]).length ? '<div style="font-size:10px;color:var(--accent)">No sub-units</div>' :
-          (u.subUnits||[]).map(s => {
+        ${!getSubUnitList(u).length ? '<div style="font-size:10px;color:var(--accent)">No sub-units</div>' :
+          getSubUnitList(u).map(s => {
             const subMembers = (s.members||[]).map(uid => S.members.find(m=>(m.uid||m.id)===uid)).filter(Boolean)
             return `
             <div style="border:1px solid rgba(91,139,181,.15);background:rgba(8,18,34,.3)">
@@ -2153,18 +2160,7 @@ window.filterAssignSearch = (unitId, subId) => {
 window.assignMember = async (unitId, subId, uid) => {
   const unit = S.units.find(u=>u.id===unitId)
   if(!unit) return
-
-  if(!subId) {
-    // Direct to unit
-    const list = [...new Set([...(unit.directMembers||[]), uid])]
-    await setDoc(doc(db,'cards',S.cardId,'units',unitId),{directMembers:list},{merge:true})
-  } else {
-    // To sub-unit
-    const subs = (unit.subUnits||[]).map(s =>
-      s.id===subId ? {...s, members:[...new Set([...(s.members||[]), uid])]} : s
-    )
-    await setDoc(doc(db,'cards',S.cardId,'units',unitId),{subUnits:subs},{merge:true})
-  }
+  await orbatAssignMember(db, S.cardId, unit, subId, uid)
   sfx('click')
   document.getElementById('assign-modal')?.remove()
 }
@@ -2173,19 +2169,7 @@ window.unassignMember = async (unitId, subId, uid) => {
   const unit = S.units.find(u=>u.id===unitId)
   if(!unit) { console.warn('unassignMember: unit not found', unitId); return }
   sfx('click')
-  if(!subId || subId === '' || subId === 'null') {
-    // Remove from direct members
-    const newList = (unit.directMembers||[]).filter(id => id !== uid)
-    await setDoc(doc(db,'cards',S.cardId,'units',unitId), {directMembers:newList}, {merge:true})
-  } else {
-    // Remove from sub-unit members array
-    const newSubs = (unit.subUnits||[]).map(s =>
-      s.id === subId
-        ? { ...s, members: (s.members||[]).filter(id => id !== uid) }
-        : s
-    )
-    await setDoc(doc(db,'cards',S.cardId,'units',unitId), {subUnits:newSubs}, {merge:true})
-  }
+  await orbatUnassignMember(db, S.cardId, unit, subId, uid)
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2237,7 +2221,7 @@ window.filterOpPlayers = () => {
 function getUnitLabel(uid) {
   for(const u of S.units) {
     if((u.directMembers||[]).includes(uid)) return '· '+u.name
-    for(const s of (u.subUnits||[])) {
+    for(const s of getSubUnitList(u)) {
       if((s.members||[]).includes(uid)) return '· '+u.name+' / '+s.name
     }
   }
@@ -2297,7 +2281,7 @@ function renderUnits() {
     return
   }
   el.innerHTML = S.units.map(u => {
-    const subs = (u.subUnits||[])
+    const subs = getSubUnitList(u)
     return `
     <div style="margin-bottom:4px">
       <div class="unit-row" onclick="toggleUnitEl('u-${u.id}','uc-${u.id}')">
@@ -2367,14 +2351,12 @@ window.createUnit = async () => {
   const color = $('unit-color-val')?.value||'#8db3d4'
   if(!name) return
   sfx('success')
-  await addDoc(collection(db,'cards',S.cardId,'units'),{
-    name, color, subUnits:[], createdAt:serverTimestamp()
-  })
+  await orbatCreateUnit(db, S.cardId, { name, color })
   document.getElementById('add-unit-modal')?.remove()
 }
 
 window.deleteUnit = async (id) => {
-  await deleteDoc(doc(db,'cards',S.cardId,'units',id))
+  await orbatDeleteUnit(db, S.cardId, id)
 }
 window.confirmDeleteUnit = (id, name) => {
   confirmInlineModal(
@@ -2410,18 +2392,12 @@ window.showAddSubUnit = (unitId) => {
 window.createSubUnit = async (unitId) => {
   const name = $('sub-name-inp')?.value.trim().toUpperCase()
   if(!name) return
-  const unit = S.units.find(u=>u.id===unitId)
-  if(!unit) return
-  const newSubs = [...(unit.subUnits||[]), {id:Date.now().toString(), name}]
-  await setDoc(doc(db,'cards',S.cardId,'units',unitId),{subUnits:newSubs},{merge:true})
+  await orbatCreateSubUnit(db, S.cardId, unitId, name)
   document.getElementById('add-sub-modal')?.remove()
 }
 
 window.deleteSubUnit = async (unitId, subId) => {
-  const unit = S.units.find(u=>u.id===unitId)
-  if(!unit) return
-  const newSubs = (unit.subUnits||[]).filter(s=>s.id!==subId)
-  await setDoc(doc(db,'cards',S.cardId,'units',unitId),{subUnits:newSubs},{merge:true})
+  await orbatDeleteSubUnit(db, S.cardId, unitId, subId)
 }
 window.confirmDeleteSubUnit = (unitId, subId, name) => {
   confirmInlineModal(
@@ -2438,7 +2414,7 @@ window.confirmDeleteSubUnit = (unitId, subId, name) => {
 function getMemberUnit(uid) {
   for(const u of S.units) {
     if((u.directMembers||[]).includes(uid)) return u.name
-    for(const s of (u.subUnits||[])) {
+    for(const s of getSubUnitList(u)) {
       if((s.members||[]).includes(uid)) return u.name+' / '+s.name
     }
   }
