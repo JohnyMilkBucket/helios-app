@@ -1316,15 +1316,6 @@ import { getDatabase, ref as dbRef, set as dbSet, push as dbPush, remove as dbRe
 import { initVoice, setRtdb, joinChannel as voiceJoin, leaveChannel as voiceLeave, leaveAllChannels as voiceLeaveAll, listenChannelPresence, getChannelAudioStats }
   from './js/voice.js'
 
-// ── MEDICAL (single-writer state — see file header for why) ───────────────
-import {
-  ZONES, ZONE_LABEL, ZONE_SPEECH, ICON_POS, LIMBS, TQ_WARN_MS, TQ_LOSS_MS,
-  INJ, BANDAGES_NEEDED, FRAG_INFO, APPLY_MS,
-  initMedical, cleanupMedical, onMedicalChange, getSelf as medGetSelf, getPatients as medGetPatients,
-  getActivePatientDocCount, markDown as medMarkDown, revive as medRevive, applyTreatment,
-  tickTourniquetClock, tickBloodDrain, clearPatient as medClearPatient, clearAllPatients as medClearAllPatients,
-} from './js/medical.js'
-
 // ── ROLES ───────────────────────────────────────────────────────────────────
 import {
   DEFAULT_LD, getEffectiveRoles as pureGetEffectiveRoles, resolveRole, createRole, deleteRole as roleDeleteRole,
@@ -1348,9 +1339,39 @@ const rtdb = getDatabase(firebaseApp)
 // ── CONSTANTS ─────────────────────────────────────────────────────────────
 const EMAIL_DOMAIN = '@helios.internal'
 const MAX_RADIO = 2
-// Medical constants (INJ, BANDAGES_NEEDED, FRAG_INFO, APPLY_MS, ZONES,
-// ZONE_LABEL, ZONE_SPEECH, ICON_POS, LIMBS, TQ_WARN_MS, TQ_LOSS_MS) now live
-// in ./js/medical.js and are imported at the top of this file.
+// tier: severity 1 (minor) - 3 (severe). bleedRate: %blood lost/sec while
+// actively bleeding (unTQ'd) — higher tier bleeds faster: tier 1 loses 1%
+// every 1.5s, tier 2 loses 1% every 1s, tier 3 loses 1% every 0.5s. Bandages
+// needed to fully pack a wound scale with tier (see BANDAGES_NEEDED) — never
+// surfaced to the player directly, they just have to keep bandaging until it
+// stops.
+const INJ = {
+  BLEED_LOW:  { name:'Low Velocity Wound',    color:'#f87171', tier:1, bleedRate:1/1.5 },
+  BLEED:      { name:'Medium Velocity Wound', color:'#dc2626', tier:2, bleedRate:1 },
+  BLEED_HIGH: { name:'High Velocity Wound',   color:'#991b1b', tier:3, bleedRate:2 },
+}
+const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
+// Fragmentation is a separate flag layered on top of a bleed (like fracture),
+// not its own bleed type — a wound can be e.g. a Medium Velocity Wound WITH
+// frag, which just means a longer pack time (see APPLY_MS.bandage_frag).
+const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
+const APPLY_MS = {
+  bandage_bleed:5000, bandage_frag:15000,
+  tourniquet:3000, stim:3000, depressant:3000, blood:10000, remove_tourniquet:2000,
+  splint:6000,
+}
+const ZONES = ['head','torso','l_arm','r_arm','l_leg','r_leg']
+const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
+const ZONE_SPEECH = {l_arm:'left arm',r_arm:'right arm',l_leg:'left leg',r_leg:'right leg'}
+const ICON_POS = {head:{x:86,y:8},torso:{x:86,y:88},l_arm:{x:30,y:161},r_arm:{x:140,y:161},l_leg:{x:72,y:260},r_leg:{x:106,y:260}}
+// Tourniquets only make sense on limbs — never head or torso.
+const LIMBS = ['l_arm','r_arm','l_leg','r_leg']
+// A TQ doesn't numb the limb the instant it goes on — circulation loss takes
+// a few minutes to actually cost you the use of it, and a few more past that
+// to cost you the limb outright. TQ_WARN_MS is also the numbness cutoff
+// (limb becomes unusable), TQ_LOSS_MS is the permanent-loss cutoff.
+const TQ_WARN_MS  = 4*60*1000
+const TQ_LOSS_MS  = 6*60*1000
 const DEFAULT_BREVITY = [] // blank slate — admins add their own
 
 // ── GLOBAL STATE ──────────────────────────────────────────────────────────
@@ -1818,8 +1839,6 @@ async function enterCard(cardId) {
   }
 }
 
-let medUnsubscribe = null
-
 function subscribeAll(cardId) {
   // Card doc
   S.listeners.push(onSnapshot(doc(db,'cards',cardId), snap => {
@@ -1898,44 +1917,58 @@ function subscribeAll(cardId) {
     renderORBAT()
   }))
 
-  // Medical — single source of truth lives in medical.js (see file header).
-  // S.self/S.patients here are a read-only mirror, replaced wholesale on
-  // every change; nothing in this file writes to them directly.
-  initMedical(db, cardId, S.user.uid, () => ({...(S.member?.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})}))
-  let prevPatientCount = 0
-  medUnsubscribe = onMedicalChange(() => {
-    const self = medGetSelf()
-    if(self._justIncapacitated) silenceAllRadios()
-    S.self = self
-    S.patients = medGetPatients()
-    updateBodyFigure()
-    renderInventory()
-    updateDownBtn()
-    // The patient-card modal (if a medic currently has one open) isn't
-    // covered by the self redraw above — refresh it explicitly so a
-    // treatment's effect shows up on the patient's own body map too.
-    if(S.openPatientId) {
-      const p = S.patients.find(x=>x.id===S.openPatientId)
-      if(p) updateBodyFigure(p.zones||{}, p.bloodPct??100, '-p', p.dead, p.uncon)
+  // Own medical record
+  S.listeners.push(onSnapshot(doc(db,'medical',cardId,'patients',S.user.uid), snap => {
+    if(snap.exists()) {
+      const d = snap.data()
+      const wasDead = S.self.dead
+      // Only update if not the one who triggered (avoid loop)
+      S.self.zones         = d.zones    || {}
+      S.self.bloodPct      = d.bloodPct ?? 100
+      S.self.down          = d.down     ?? false
+      S.self.uncon         = d.uncon    ?? false
+      S.self.dead          = d.dead     ?? false
+      S.self.overdosing    = d.overdosing ?? false
+      S.self.odStacks      = d.odStacks ?? 0
+      S.self.inv      = d.inv      || S.self.inv
+      // A medic's treatment (e.g. a fatal stim overdose) can kill/knock you
+      // out remotely — cut an already-held PTT immediately, don't wait for
+      // the next keypress.
+      if(!wasDead && S.self.dead) silenceAllRadios()
+      updateBodyFigure()
+      renderInventory()
+      updateDownBtn()
+    } else {
+      S.self.down = false; S.self.uncon = false; S.self.dead = false; S.self.zones = {}; S.self.bloodPct = 100
+      S.self.overdosing = false; S.self.odStacks = 0
+      S.self.inv = { ...(S.member?.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}) }
+      updateBodyFigure()
+      renderInventory()
+      updateDownBtn()
     }
+  }))
 
-    if(S.patients.length > prevPatientCount && prevPatientCount > 0 && S.cardId) sfx('casualty')
-    prevPatientCount = S.patients.length
+  // All patients (for medic view)
+  S.listeners.push(onSnapshot(collection(db,'medical',cardId,'patients'), snap => {
+    const prevPat = S.patients.length
+    // Never include your own record here — "patients" is the medic's view
+    // of OTHER downed people. Your own casualty state lives in S.self and
+    // is shown/treated only through MY STATUS.
+    S.patients = snap.docs.filter(d=>d.id!==S.user.uid).map(d=>({id:d.id,...d.data()}))
+    if(S.patients.length > prevPat && prevPat >= 0 && S.cardId) sfx('casualty')
     const cnt = S.patients.length
     $('patient-badge').textContent = cnt ? `(${cnt})` : ''
     $('qs-cas').textContent = cnt
     $('qs-cas').style.color = cnt>0 ? 'var(--red)' : 'var(--green)'
     const adminCnt = $('admin-patient-count')
-    if(adminCnt) adminCnt.textContent = getActivePatientDocCount() + ' active' // includes self, unlike S.patients
+    if(adminCnt) adminCnt.textContent = snap.docs.length + ' active' // includes self, unlike S.patients
     if(S.medView==='patients') renderPatients()
-  })
+  }))
 }
 
 async function cleanupListeners() {
   S.listeners.forEach(u => { try { u() } catch(e){} })
   S.listeners = []
-  cleanupMedical()
-  if(medUnsubscribe) { medUnsubscribe(); medUnsubscribe = null }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2936,19 +2969,65 @@ function updateDownBtn() {
   }
 }
 
-// Mark-down injury generation (severity tiers, head-shot odds) and revive
-// both live in medical.js now — this is just the UI-facing wrapper. Local
-// state (S.self) updates via the onMedicalChange subscription once the
-// write's snapshot echoes back, not from anything mutated here.
 window.toggleDown = async () => {
   if(S.self.down) {
-    await medRevive()
+    // Revive
+    S.self.down=false; S.self.uncon=false; S.self.dead=false; S.self.zones={}; S.self.bloodPct=100
+    S.self.overdosing=false; S.self.odStacks=0; S.self.hr=78
+    S.self.inv = {...(S.member.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})}
+    await deleteDoc(doc(db,'medical',S.cardId,'patients',S.user.uid))
     await syncToJointCasualties({down:false})
     sfx('revive')
+    updateDownBtn()
+    updateBodyFigure(); renderInventory()
   } else {
-    const { headHit, startUncon } = await medMarkDown()
+    // Mark down with random injuries. Each hit zone rolls an overall wound
+    // tier — 60% tier 1, 30% tier 2, 10% tier 3 — which composes its own
+    // bleed severity / fragmentation / fracture odds:
+    //   Tier 1: tier 1-2 bleed, 20% chance of frag, never fractures
+    //   Tier 2: tier 2 bleed (low chance of tier 3), always frag, 30% fracture
+    //   Tier 3: tier 3 bleed, always frag, always fracture
+    // A head hit skips all of this — it's always instantly fatal, so it's
+    // rolled separately at a low flat chance instead of being just another
+    // one of the 6 zones (that made most casualties instant deaths).
+    const HEAD_HIT_CHANCE = 0.08
+    const headHit = Math.random() < HEAD_HIT_CHANCE
+    const bodyPool = ZONES.filter(z=>z!=='head')
+    const shuffled = [...bodyPool].sort(()=>Math.random()-.5)
+    const count = 1+Math.floor(Math.random()*4)
+    S.self.zones={}
+    const hitZones = headHit ? ['head', ...shuffled.slice(0,Math.max(0,count-1))] : shuffled.slice(0,count)
+    hitZones.forEach(z=>{
+      const wr = Math.random()
+      const wtier = wr<.6 ? 1 : wr<.9 ? 2 : 3
+      let bleedTier, frag, fracture
+      if(wtier===1)      { bleedTier = Math.random()<.5?1:2; frag = Math.random()<.20; fracture = false }
+      else if(wtier===2) { bleedTier = Math.random()<.25?3:2; frag = true;             fracture = Math.random()<.30 }
+      else               { bleedTier = 3;                     frag = true;             fracture = true }
+      const injType = bleedTier===1?'BLEED_LOW':bleedTier===2?'BLEED':'BLEED_HIGH'
+      S.self.zones[z] = {
+        inj:injType, frag, bleeding:true, tq:false, fracture, pain:true,
+        bandaged:false, bandagesApplied:0, tqAppliedAt:null, tqNumb:false, limbLost:false,
+      }
+    })
+    // Only a severe (tier 3) bleed knocks someone out immediately — lesser
+    // wounds leave you down-but-conscious, and only tip into unconsciousness
+    // later if blood loss actually drags you under the 25% threshold.
+    const maxTier = Math.max(0, ...Object.values(S.self.zones).map(s=>INJ[s.inj]?.tier||0))
+    const startUncon = headHit || maxTier>=3
+    S.self.bloodPct=100; S.self.down=true; S.self.uncon=startUncon; S.self.dead=headHit
+    S.self.overdosing=false; S.self.odStacks=0
+    if(headHit) S.self.hr=0
     sfx('casualty')
     if(startUncon) silenceAllRadios() // conscious-but-down can still call for help over the net
+    updateDownBtn()
+    await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
+      username:S.profile.username||S.member?.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid,
+      zones:S.self.zones, bloodPct:S.self.bloodPct, overdosing:false, odStacks:0,
+      down:true, uncon:startUncon, dead:headHit, ...(headHit?{hr:0}:{}), inv:{...S.self.inv},
+      downdAt:Date.now(), updatedAt:serverTimestamp()
+    })
+    updateBodyFigure(); renderInventory()
   }
 }
 
@@ -3190,7 +3269,7 @@ window.openPatientTreat = (patientId) => {
 // A medic can declare a treated patient stable and clear them off the
 // casualty board — doesn't require the patient to self-revive.
 window.clearPatient = async (patientId) => {
-  await medClearPatient(patientId)
+  await deleteDoc(doc(db,'medical',S.cardId,'patients',patientId))
   if($('treat-modal')) $('treat-modal').style.display='none'
   closePatientCard()
   sfx('revive')
@@ -3211,7 +3290,7 @@ window.openTreat = (zone, target='self') => {
 
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
-    : S.self
+    : { zones:S.self.zones, inv:S.self.inv, uncon:S.self.uncon, dead:S.self.dead }
 
   if(!patient) return
 
@@ -3351,7 +3430,7 @@ window.startApply = (zone, treatment, target) => {
 
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
-    : S.self
+    : { zones:S.self.zones, inj:S.self.zones[zone]?.inj }
   // One TQ per limb — this shouldn't be reachable via the UI (the button
   // switches to REMOVE TQ once a zone is tourniqueted) but guard it directly
   // too, in case a stale render or a race ever leaves the old button live.
@@ -3379,14 +3458,18 @@ window.startApply = (zone, treatment, target) => {
     openTreat(S.applying.zone, S.applying.target||'self')
     if(pct>=100){
       clearInterval(applyInterval)
-      // finishApply() only ever WRITES to Firestore — it never mutates local
-      // state. The single medical.js listener is what updates S.self/
-      // S.patients, once, from the confirmed server data (see medical.js
-      // header for why that used to be two competing writers). So even if
-      // this write fails, there's no local optimistic state to get stuck or
-      // to silently revert — the UI already reflects real persisted state.
+      // If the Firestore write in finishApply ever fails (network blip,
+      // brief disconnect — plausible mid-session), S.applying must still
+      // get cleared. Otherwise startApply's `if(S.applying) return` guard
+      // permanently locks the player out of every future treatment,
+      // including things like REMOVE TQ that look like they silently do
+      // nothing. The local zone/blood state was already mutated before the
+      // write inside finishApply, so the effect isn't lost either way —
+      // only the sync to Firestore is what can fail.
       try {
         await finishApply(S.applying)
+      } catch(e) {
+        console.error('Treatment failed to sync:', e)
       } finally {
         S.applying=null
         if($('treat-modal').style.display!=='none') openTreat(zone,target)
@@ -3395,16 +3478,157 @@ window.startApply = (zone, treatment, target) => {
   },60)
 }
 
+function freshZone() {
+  return {inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,tqAppliedAt:null,tqNumb:false,limbLost:false}
+}
+
+// A wound needs as many bandage applications as its severity tier calls
+// for (BANDAGES_NEEDED) before it's actually packed — the player is never
+// told the number up front, they just keep bandaging until it stops.
+// Packing "counts" even under a live TQ, so hitting the full count while a
+// TQ is on still marks it safe to pull.
+function applyBandageToZone(zs) {
+  if(!zs) return
+  zs.bandagesApplied = (zs.bandagesApplied||0)+1
+  const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
+  if(zs.bandagesApplied>=need) { zs.bleeding=false; zs.bandaged=true }
+}
+
+// Fresh TQ — circulation loss hasn't set in yet, so the limb stays usable
+// until the numbness clock (TQ_WARN_MS, tracked separately as tqNumb)
+// catches up to it.
+function applyTourniquetToZone(zs) {
+  zs.tq=true; zs.bleeding=false; zs.tqAppliedAt=Date.now(); zs.tqNumb=false
+}
+
+// No inventory cost — pulling a TQ only resumes bleeding if the wound was
+// never packed with a bandage while it was on. Feeling comes back to the
+// limb the moment the TQ is off.
+function removeTourniquetFromZone(zs) {
+  zs.tq=false; zs.tqAppliedAt=null; zs.tqNumb=false
+  zs.bleeding = zs.bandaged ? false : !!zs.inj
+}
+
+// Unconscious -> stim wakes them up clean, no risk. Conscious -> stim is an
+// overdose: heart rate spikes into the 200-250 danger band, and every
+// additional dose taken while still in that band stacks another +2% on top
+// of the running chance of cardiac death (rolled on that dose).
+function applyStimTo(obj) {
+  if(obj.uncon) {
+    obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95
+  } else {
+    obj.odStacks=(obj.odStacks||0)+1
+    obj.overdosing=true
+    obj.hr=200+Math.floor(Math.random()*51) // 200-250
+    if(Math.random() < Math.min(1, 0.02*obj.odStacks)) {
+      obj.dead=true; obj.uncon=true; obj.overdosing=false; obj.hr=0
+    }
+  }
+}
+
+// Clears an active overdose outright (that's the point of countering a
+// stim with a depressant) — otherwise it's just a normal HR-lowering aid.
+function applyDepressantTo(obj) {
+  if(obj.overdosing) { obj.hr=78; obj.overdosing=false; obj.odStacks=0 }
+  else obj.hr=55
+}
+
 async function finishApply(a) {
+  const {zone,treatment,target,patientId} = a
+  const isSelf = target!=='patient'
+  const patient = isSelf ? null : S.patients.find(p=>p.id===patientId)
+  const targetObj = isSelf ? S.self : patient
+
+  if(treatment==='bandage') {
+    const zs = targetObj?.zones?.[zone]
+    applyBandageToZone(zs)
+    S.self.inv.bandage = Math.max(0,(S.self.inv.bandage||0)-1)
+  } else if(treatment==='tourniquet'&&LIMBS.includes(zone)) {
+    if(targetObj) {
+      if(!targetObj.zones[zone]) targetObj.zones[zone]=freshZone()
+      applyTourniquetToZone(targetObj.zones[zone])
+    }
+    S.self.inv.tourniquet = Math.max(0,(S.self.inv.tourniquet||0)-1)
+  } else if(treatment==='remove_tourniquet') {
+    const zs = targetObj?.zones?.[zone]
+    if(zs) removeTourniquetFromZone(zs)
+  } else if(treatment==='splint') {
+    // Fixes the fracture flag only, doesn't touch bleeding
+    if(targetObj?.zones?.[zone]) targetObj.zones[zone].fracture=false
+    S.self.inv.splint = Math.max(0,(S.self.inv.splint||0)-1)
+  } else if(treatment==='stim') {
+    if(targetObj) {
+      applyStimTo(targetObj)
+      if(isSelf && S.self.dead) silenceAllRadios()
+    }
+    S.self.inv.stim = Math.max(0,(S.self.inv.stim||0)-1)
+  } else if(treatment==='depressant') {
+    if(targetObj) applyDepressantTo(targetObj)
+    S.self.inv.depressant = Math.max(0,(S.self.inv.depressant||0)-1)
+  } else if(treatment==='blood') {
+    if(targetObj) targetObj.bloodPct = Math.min(100,(targetObj.bloodPct||0)+40)
+    S.self.inv.blood = Math.max(0,(S.self.inv.blood||0)-1)
+  }
+
+  // Write to Firestore — local state above already reflects the treatment
+  // regardless of whether this sync succeeds, so a failed write here must
+  // never block the UI refresh below (that's what used to leave the
+  // progress bar/body map stuck mid-treatment on a network blip).
+  //
+  // Only touch the one zone this treatment actually changed (via a dot-path
+  // field, e.g. "zones.l_arm"), not the whole `zones` map. merge:true
+  // REPLACES nested map fields wholesale rather than deep-merging them, so
+  // writing the full zones object here was clobbering other zones whenever
+  // two medics treated the same patient around the same time — whichever
+  // write landed second would silently overwrite the first medic's change
+  // with its own (already-stale) local copy of the zone it never touched.
+  // Same reasoning applies to bloodPct/uncon/dead/overdosing/odStacks — only
+  // included when this specific treatment actually changes them.
+  let syncError = null
   try {
-    await applyTreatment(a)
-    sfx('treatment-done')
+    if(isSelf) {
+      const upd = { [`zones.${zone}`]: S.self.zones[zone], inv:S.self.inv, updatedAt:serverTimestamp() }
+      if(treatment==='blood') upd.bloodPct = S.self.bloodPct
+      if(treatment==='stim' || treatment==='depressant') upd.hr = S.self.hr
+      if(treatment==='stim' || treatment==='depressant') { upd.overdosing=S.self.overdosing; upd.odStacks=S.self.odStacks }
+      if(treatment==='stim') { upd.uncon=S.self.uncon; upd.dead=S.self.dead }
+      await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid), upd, {merge:true})
+    } else if(patient) {
+      const upd = { [`zones.${zone}`]: patient.zones[zone], updatedAt:serverTimestamp() }
+      if(treatment==='blood') upd.bloodPct = patient.bloodPct
+      if(treatment==='stim' || treatment==='depressant') upd.hr = patient.hr
+      if(treatment==='stim' || treatment==='depressant') { upd.overdosing=patient.overdosing; upd.odStacks=patient.odStacks }
+      if(treatment==='stim') { upd.uncon=patient.uncon; upd.dead=patient.dead }
+      await setDoc(doc(db,'medical',S.cardId,'patients',patientId), upd, {merge:true})
+      // Deduct from medic's own inventory
+      await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
+        inv:S.self.inv, updatedAt:serverTimestamp()
+      },{merge:true})
+    }
   } catch(e) {
-    console.error('Treatment failed:', e)
+    console.error('Treatment failed to sync to Firestore:', e)
+    syncError = e
+  }
+
+  // A failed write used to fail SILENTLY — the treat panel would show the
+  // treatment as applied (from local state) until the next realtime
+  // snapshot quietly reverted it back to the server's untouched copy, with
+  // no explanation. Surface it instead so it's never a mystery.
+  if(syncError) {
     sfx('error')
     callout('treatment failed to save, retry')
-    openInlineModal('sync-err','<div class="modal-box" style="max-width:340px;border-color:var(--red)" onclick="closeInlineModal(\'sync-err\')"><div class="modal-head"><div class="orb" style="font-size:13px;font-weight:700;color:var(--red)">TREATMENT NOT SAVED</div></div><div style="padding:14px 16px;font-size:12px;color:var(--redsoft)">' + (e.message||'unknown error').replace(/'/g,"") + '</div></div>')
+    openInlineModal('sync-err','<div class="modal-box" style="max-width:340px;border-color:var(--red)" onclick="closeInlineModal(\'sync-err\')"><div class="modal-head"><div class="orb" style="font-size:13px;font-weight:700;color:var(--red)">TREATMENT NOT SAVED</div></div><div style="padding:14px 16px;font-size:12px;color:var(--redsoft)">This treatment applied locally but failed to sync to the server (' + (syncError.message||'unknown error').replace(/'/g,"") + '). It will likely revert — check your connection and try again.</div></div>')
+  } else {
+    sfx('treatment-done')
   }
+  // Refresh whichever body map/overview this treatment actually applied to
+  // — the patient card behind the treat modal was only hidden, not rebuilt,
+  // so it needs its own explicit redraw or it'd show stale state once the
+  // player closes back out to it.
+  if(isSelf) updateBodyFigure()
+  else if(patient) updateBodyFigure(patient.zones||{}, patient.bloodPct??100, '-p', patient.dead, patient.uncon)
+  updateDownBtn()
+  renderInventory()
   $('treat-prog-wrap').style.display='none'
   if($('prog-fill')) $('prog-fill').style.width='0%'
 }
@@ -3445,21 +3669,15 @@ function renderInventory() {
 // ════════════════════════════════════════════════════════════════════════════
 // VITALS TICKERS
 // ════════════════════════════════════════════════════════════════════════════
-// Purely cosmetic display HR for the heartbeat animation — deliberately NOT
-// part of S.self (which only ever reflects confirmed server state via the
-// medical.js listener). Drifts toward whatever S.self.hr currently says
-// without persisting anywhere, so there's no local/remote state to conflict.
-let hrDisplay = 78
-
 function startTickers() {
-  // HR drift (visual only)
+  // HR drift
   setInterval(() => {
     if(!S.cardId) return
     const h=$('hr-val'), bp=$('bp-val'), sp=$('spo2-val'), ht=$('hr-heart'), ecg=$('ecg-line'), bv=$('blood-val')
     // Dead is dead — flatline, no more drift/animation, regardless of what
     // killed them (bled out, stim overdose, etc).
     if(S.self.dead) {
-      hrDisplay = 0
+      S.self.hr = 0
       if(h){h.textContent=0;h.style.color='#6b7280';h.style.animation='none'}
       if(ht){ht.setAttribute('fill','#6b7280');ht.setAttribute('stroke','#6b7280');ht.style.animation='none'}
       if(ecg){ecg.style.animation='none'}
@@ -3468,7 +3686,7 @@ function startTickers() {
       if(bv){bv.textContent='0%';bv.style.color='#6b7280'}
       return
     }
-    let base=S.self.hr||78
+    let base=78
     if(S.self.down) base=S.self.uncon?145:110
     if(S.self.bloodPct<40) base+=32
     else if(S.self.bloodPct<70) base+=16
@@ -3476,11 +3694,11 @@ function startTickers() {
     // the 200-250 danger band until a depressant clears it.
     if(S.self.overdosing) base=225
     const hrCap = S.self.overdosing ? 250 : 220
-    hrDisplay = Math.round(Math.max(38,Math.min(hrCap, base+(Math.random()-.5)*6+(hrDisplay-base)*0.28)))
-    const pSec=(60/Math.max(20,hrDisplay)).toFixed(2)
+    S.self.hr = Math.round(Math.max(38,Math.min(hrCap, base+(Math.random()-.5)*6+(S.self.hr-base)*0.28)))
+    const pSec=(60/Math.max(20,S.self.hr)).toFixed(2)
     const hC = S.self.overdosing?'#dc2626':S.self.down?'#ef4444':'#4ade80'
     const vC = S.self.bloodPct<40?'#dc2626':S.self.down?'#fbbf24':'#4ade80'
-    if(h){h.textContent=hrDisplay;h.style.color=hC;h.style.animation=`hb ${pSec}s ease-in-out infinite`}
+    if(h){h.textContent=S.self.hr;h.style.color=hC;h.style.animation=`hb ${pSec}s ease-in-out infinite`}
     if(ht){ht.setAttribute('fill',hC);ht.setAttribute('stroke',hC);ht.style.animation=`hb ${pSec}s ease-in-out infinite`}
     if(ecg){ecg.setAttribute('stroke',hC);ecg.style.animation=`ecg ${pSec}s linear infinite`}
     if(bp) {bp.textContent=S.self.bloodPct<40?'64/40':S.self.down?'88/52':'120/80';bp.style.color=vC}
@@ -3488,12 +3706,89 @@ function startTickers() {
     if(bv) {bv.textContent=Math.round(S.self.bloodPct)+'%';bv.style.color=vC}
   },600)
 
-  // Tourniquet clock and blood drain both live in medical.js now — they
-  // compute purely and WRITE ONLY, same as every treatment. Local state
-  // updates through the one onMedicalChange subscription once the write's
-  // snapshot echoes back, so there's nothing here to keep in sync manually.
-  setInterval(() => { tickTourniquetClock(callout, sfx).catch(e=>console.error('TQ clock failed:',e)) }, 5000)
-  setInterval(() => { tickBloodDrain(sfx).catch(e=>console.error('Blood drain failed:',e)) }, 1000)
+  // Tourniquet clock — leaving a TQ on too long costs the limb permanently
+  setInterval(async () => {
+    if(!S.cardId||!S.self.down||S.self.dead) return
+    // Dot-path per changed zone only — a medic could be mid-treating a
+    // DIFFERENT zone on this same patient doc right now, and a whole-object
+    // `zones:S.self.zones` write here would clobber their edit the same way
+    // finishApply's used to (see the long comment there).
+    const upd = {}
+    let changed = false
+    for(const z of LIMBS) {
+      const s = S.self.zones[z]
+      if(!s || !s.tq || s.limbLost || !s.tqAppliedAt) continue
+      const tqMs = Date.now()-s.tqAppliedAt
+      if(tqMs >= TQ_LOSS_MS) {
+        s.limbLost = true
+        s.bleeding = false // nothing left to bleed
+        upd[`zones.${z}`] = s
+        changed = true
+        sfx('alert')
+      } else if(!s.tqNumb && tqMs >= TQ_WARN_MS) {
+        // Circulation loss just caught up to this limb — it goes numb and
+        // becomes unusable, distinct from (and well before) losing it outright.
+        s.tqNumb = true
+        upd[`zones.${z}`] = s
+        changed = true
+        sfx('alert')
+        callout(`${ZONE_SPEECH[z]} unusable, tourniquet`)
+      }
+    }
+    if(changed) {
+      updateBodyFigure()
+      await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),
+        {...upd, updatedAt:serverTimestamp()}, {merge:true})
+      if(S.openZone) openTreat(S.openZone, S.openPatientId ? 'patient' : 'self')
+    }
+  },5000)
+
+  // Blood drain — rate is the AVERAGE of every actively-bleeding zone's own
+  // tier-based bleedRate (see INJ), applied once per second. Averaging
+  // (rather than summing) keeps a flat, predictable %/s regardless of how
+  // many wounds are open at once, instead of blood loss compounding with
+  // every extra hit.
+  setInterval(async () => {
+    if(!S.cardId||!S.self.down||S.self.dead) return
+    const bleedingZones = Object.values(S.self.zones).filter(s=>s.bleeding&&!s.tq)
+    if(bleedingZones.length){
+      const rate = bleedingZones.reduce((sum,s)=>sum+(INJ[s.inj]?.bleedRate ?? 1.0), 0) / bleedingZones.length
+      S.self.bloodPct=Math.max(0,S.self.bloodPct-rate)
+      updateBodyFigure()
+
+      if(S.self.bloodPct<=0) {
+        // Bled out — deceased. Only a full revive can bring them back.
+        S.self.dead = true
+        S.self.hr = 0
+        sfx('alert')
+        silenceAllRadios()
+        updateDownBtn()
+        await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
+          bloodPct:0, hr:0, dead:true, uncon:true, updatedAt:serverTimestamp()
+        },{merge:true})
+        if(S.openZone) openTreat(S.openZone, S.openPatientId ? 'patient' : 'self')
+        return
+      }
+
+      // Blood loss knocks a conscious casualty out at 25% — synced
+      // immediately (not batched) since it also gates radio transmit.
+      if(!S.self.uncon && S.self.bloodPct<=25) {
+        S.self.uncon = true
+        sfx('alert')
+        silenceAllRadios()
+        updateDownBtn()
+        await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
+          uncon:true, bloodPct:S.self.bloodPct, updatedAt:serverTimestamp()
+        },{merge:true})
+        if(S.openZone) openTreat(S.openZone, S.openPatientId ? 'patient' : 'self')
+      }
+
+      // Sync every ~5s to avoid write spam
+      if(Math.random()<0.2) {
+        await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{bloodPct:S.self.bloodPct,hr:S.self.hr,updatedAt:serverTimestamp()},{merge:true})
+      }
+    }
+  },1000)
 }
 
 function startZulu() {
@@ -4901,7 +5196,8 @@ window.saveCardName = async () => {
 window.clearAllPatients = async () => {
   confirmInlineModal('Clear All Patients?','Wipes every active casualty record on this card, including your own if you\'re currently down. This cannot be undone.',true,async()=>{
     sfx('alert')
-    await medClearAllPatients()
+    const snap = await getDocs(collection(db,'medical',S.cardId,'patients'))
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)))
   })
 }
 
