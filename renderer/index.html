@@ -906,9 +906,9 @@ html.popout-mode #content{padding:10px 12px}
             <!-- MOBILE COMPANION -->
             <div class="panel" style="padding:15px">
               <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">MOBILE COMPANION</div>
-              <div style="font-size:11px;color:#a8b8cc;margin-bottom:10px">Check the roster, active op, casualties, and treat patients from a phone — same account and card, no install needed.</div>
+              <div style="font-size:11px;color:#a8b8cc;margin-bottom:10px">Check the roster, active/past ops, casualties, ORBAT, roles, joint ops, and treat patients from a phone — same account and card, installable as an app.</div>
               <div class="orb" style="font-size:13px;font-weight:700;color:var(--hi)">helios-app-c803f.web.app</div>
-              <div style="font-size:10px;color:var(--accent);margin-top:8px">Comms, ORBAT, roles, and admin tools are desktop-only for now.</div>
+              <div style="font-size:10px;color:var(--accent);margin-top:8px">Comms and admin tools are desktop-only for now.</div>
             </div>
 
             <!-- TUTORIALS -->
@@ -1400,6 +1400,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.8', items:[
+    'Mobile companion: new ORG tab (read-only ORBAT + Roles), and shows an active Joint Operation with shared casualty board if your card is in one.',
+  ]},
   { v:'1.4.7', items:[
     'Added an activity log to the Admin panel — who treated whom, who went down/revived, who started/archived operations.',
     'Operations now show a live casualty count on both desktop and mobile.',

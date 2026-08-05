@@ -150,10 +150,12 @@ button{font-family:inherit;cursor:pointer}
   <div id="main">
     <div id="view-dashboard"></div>
     <div id="view-medical" class="hidden"></div>
+    <div id="view-org" class="hidden"></div>
   </div>
   <div id="navbar">
     <button class="active" id="nav-dashboard" onclick="switchView('dashboard')"><span class="ic">&#9673;</span>DASHBOARD</button>
     <button id="nav-medical" onclick="switchView('medical')"><span class="ic">&#10010;</span>MEDICAL</button>
+    <button id="nav-org" onclick="switchView('org')"><span class="ic">&#9776;</span>ORG</button>
   </div>
 </div>
 
@@ -186,7 +188,16 @@ const ZONES = Medical.ZONES
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
 const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST'}
 
-const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], events:[], self:Medical.getSelf(), patients:[], listeners:[] }
+const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], events:[], roles:[], units:[], self:Medical.getSelf(), patients:[], listeners:[], jointOp:null, jointOpParticipants:[], jointOpCasualties:[] }
+
+// Sub-units are stored as a map keyed by id (or, on old docs, a legacy
+// array — see renderer/js/orbat.js for why) — this mirrors that module's
+// getSubUnitList() read-only, without pulling in its write functions too.
+function getSubUnitList(unit) {
+  const raw = unit.subUnits
+  const map = !raw ? {} : Array.isArray(raw) ? Object.fromEntries(raw.map(s=>[s.id,s])) : raw
+  return Object.entries(map).map(([id,s]) => ({ id, name:s.name, members:s.members||[] }))
+}
 
 // ── ALERTS (sound + notification) ────────────────────────────────────────
 // Fires while this page is open (foreground or backgrounded tab) — this is
@@ -298,6 +309,7 @@ async function enterCard(cardId) {
 
   const cardSnap = await getDoc(doc(db,'cards',cardId))
   S.card = { id:cardId, ...cardSnap.data() }
+  if(S.card.currentJointOp) subscribeJointOp(S.card.currentJointOp)
   $('app-cardname').textContent = S.card.name||'HELIOS CARD'
 
   Medical.setActorName(S.profile.username||'UNKNOWN OPERATIVE')
@@ -342,6 +354,14 @@ async function enterCard(cardId) {
       renderDashboard()
     }
   ))
+  S.listeners.push(onSnapshot(collection(db,'cards',cardId,'roles'), snap => {
+    S.roles = snap.docs.map(d=>({id:d.id,...d.data()}))
+    renderOrgView()
+  }))
+  S.listeners.push(onSnapshot(collection(db,'cards',cardId,'units'), snap => {
+    S.units = snap.docs.map(d=>({id:d.id,...d.data()}))
+    renderOrgView()
+  }))
 
   switchView('dashboard')
 }
@@ -349,6 +369,25 @@ function cleanupListeners() {
   S.listeners.forEach(u=>{try{u()}catch(e){}})
   S.listeners = []
   Medical.cleanupMedical()
+}
+
+// Read-only — the card doc's currentJointOp field (set by the desktop app
+// when hosting/joining) is the only pointer needed to find which joint op,
+// if any, this card is currently part of.
+function subscribeJointOp(joId) {
+  S.listeners.push(onSnapshot(doc(db,'jointOps',joId), snap => {
+    S.jointOp = snap.exists() ? {id:joId, ...snap.data()} : null
+    if(S.jointOp && S.jointOp.status!=='active') S.jointOp = null
+    renderDashboard()
+  }))
+  S.listeners.push(onSnapshot(collection(db,'jointOps',joId,'participants'), snap => {
+    S.jointOpParticipants = snap.docs.map(d=>({id:d.id,...d.data()}))
+    renderDashboard()
+  }))
+  S.listeners.push(onSnapshot(collection(db,'jointOps',joId,'casualties'), snap => {
+    S.jointOpCasualties = snap.docs.map(d=>({id:d.id,...d.data()}))
+    renderDashboard()
+  }))
 }
 function show(id) {
   ['screen-auth','screen-cards','screen-app'].forEach(s=>$(s).classList.toggle('hidden', s!==id))
@@ -358,10 +397,13 @@ function show(id) {
 window.switchView = (v) => {
   $('view-dashboard').classList.toggle('hidden', v!=='dashboard')
   $('view-medical').classList.toggle('hidden', v!=='medical')
+  $('view-org').classList.toggle('hidden', v!=='org')
   $('nav-dashboard').classList.toggle('active', v==='dashboard')
   $('nav-medical').classList.toggle('active', v==='medical')
+  $('nav-org').classList.toggle('active', v==='org')
   if(v==='dashboard') renderDashboard()
   if(v==='medical') renderMedicalView()
+  if(v==='org') renderOrgView()
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────
@@ -373,6 +415,21 @@ function renderDashboard() {
   const online = S.members.filter(m=>m.online).length
   const patients = Medical.getPatients()
   el.innerHTML = `
+    ${S.jointOp ? `
+    <div class="panel" style="border-color:var(--amber)">
+      <div class="label" style="color:var(--amber)">JOINT OP — ${(S.jointOp.opType||'JOINT OP').replace('_',' ')}</div>
+      <div style="font-size:14px;font-weight:700">${S.jointOp.name||'—'}</div>
+      <div style="font-size:10px;color:var(--accent);margin-top:6px">${S.jointOpParticipants.length} FACTION${S.jointOpParticipants.length===1?'':'S'} PARTICIPATING</div>
+      ${S.jointOpCasualties.length ? `
+        <div style="margin-top:8px;border-top:1px solid rgba(91,139,181,.15);padding-top:8px">
+          <div style="font-size:9px;letter-spacing:.2em;color:var(--accent);margin-bottom:4px">SHARED CASUALTY BOARD</div>
+          ${S.jointOpCasualties.map(c=>`
+            <div class="patient-row">
+              <span>${c.username||c.uid} <span style="color:var(--accent)">(${c.faction||c.cardId})</span></span>
+              <span style="color:var(--redsoft)">${c.uncon?'UNCONSCIOUS':'DOWN'}</span>
+            </div>`).join('')}
+        </div>` : ''}
+    </div>` : ''}
     <div class="panel">
       <div class="label">ACTIVE OPERATION</div>
       ${activeOp
@@ -406,7 +463,7 @@ function renderDashboard() {
           <span style="color:${p.dead?'#94a3b8':'var(--redsoft)'}">${p.dead?(DEATH_LABEL[p.deathCause]||'DECEASED'):p.uncon?'UNCONSCIOUS':'DOWN'}</span>
         </div>`).join('') : '<div style="font-size:11px;color:var(--accent)">No active casualties</div>'}
     </div>
-    <div class="notice">Full comms, ORBAT, roles, and admin tools are available on the desktop app.<br>iPhone: add this to your home screen via Share &rarr; Add to Home Screen.</div>
+    <div class="notice">ORBAT and roles are viewable under ORG. Comms and admin tools are still desktop-only.<br>iPhone: add this to your home screen via Share &rarr; Add to Home Screen.</div>
   `
 }
 
@@ -525,6 +582,42 @@ function renderZoneTreatRow(zone, zs, inv) {
   if(zs?.tq && !zs.limbLost) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_tourniquet')" style="font-size:9px;padding:7px 8px">REMOVE TQ</button>`)
   if(zs?.fracture) actions.push(`<button class="btn" ${!inv.splint?'disabled':''} onclick="doTreat('${zone}','splint')" style="font-size:9px;padding:7px 8px">SPLINT</button>`)
   return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[zone]}<br><span style="color:${st.color};font-size:9px">${st.text}</span></span><span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">${actions.join('')||'<span style="font-size:9px;color:var(--accent)">—</span>'}</span></div>`
+}
+
+// ── ORG (read-only ORBAT + Roles) ───────────────────────────────────────
+function renderOrgView() {
+  const el = $('view-org')
+  if(!S.cardId) return
+  const nameOf = uid => S.members.find(m=>(m.uid||m.id)===uid)?.username || uid
+  el.innerHTML = `
+    <div class="panel">
+      <div class="label">ROLES</div>
+      ${S.roles.length ? S.roles.map(role => {
+        const memberCount = S.members.filter(m=>m.role===role.name).length
+        const perms = [role.isAdmin&&'ADMIN', role.canTreatOthers&&'MEDIC', role.canCreateOps&&'OPS', role.canEditBrevity&&'BREVITY', role.canMultiChan&&'MULTI-CH'].filter(Boolean)
+        return `<div style="padding:8px 0;border-bottom:1px solid rgba(91,139,181,.12)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:700;color:${role.color||'#e8eef5'}">${role.name}</span>
+            <span style="color:var(--accent);font-size:10px">${memberCount} MEMBER${memberCount===1?'':'S'}</span>
+          </div>
+          ${perms.length?`<div style="font-size:9px;color:var(--accent);margin-top:3px">${perms.join(' · ')}</div>`:''}
+        </div>`
+      }).join('') : '<div style="font-size:11px;color:var(--accent);text-align:center;padding:20px">No roles yet</div>'}
+    </div>
+    <div class="panel">
+      <div class="label">UNITS</div>
+      ${S.units.length ? S.units.map(u => {
+        const subs = getSubUnitList(u)
+        const direct = (u.directMembers||[]).map(nameOf)
+        return `<div style="margin-bottom:10px">
+          <div style="font-weight:700;color:${u.color||'#e8eef5'}">${u.name}</div>
+          ${direct.length?`<div style="font-size:10.5px;color:#a8b8cc;margin:3px 0 0 10px">${direct.join(', ')}</div>`:''}
+          ${subs.map(s=>`<div style="margin:4px 0 0 14px;font-size:10.5px"><span style="color:var(--accent)">&raquo; ${s.name}</span><div style="color:#a8b8cc;margin-left:10px">${s.members.map(nameOf).join(', ')||'—'}</div></div>`).join('')}
+        </div>`
+      }).join('') : '<div style="font-size:11px;color:var(--accent);text-align:center;padding:20px">No units created yet</div>'}
+    </div>
+    <div class="notice">Editing roles and ORBAT is desktop-only for now.</div>
+  `
 }
 
 // ── BOOT ──────────────────────────────────────────────────────────────────

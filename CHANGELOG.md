@@ -3,6 +3,12 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.8
+- Mobile companion gets a new ORG tab: read-only ORBAT (units, sub-units,
+  assigned members) and Roles (perms, loadouts, member counts).
+- Mobile companion now shows an active Joint Operation (if your card is in
+  one) with the shared casualty board, read-only.
+
 ## v1.4.7
 - Added an activity log to the Admin panel — who treated whom, who went
   down/revived, who started/archived operations, with timestamps.
