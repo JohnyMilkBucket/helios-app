@@ -3599,6 +3599,7 @@ async function finishApply(a) {
   // with its own (already-stale) local copy of the zone it never touched.
   // Same reasoning applies to bloodPct/uncon/dead/overdosing/odStacks — only
   // included when this specific treatment actually changes them.
+  let syncError = null
   try {
     if(isSelf) {
       const upd = { [`zones.${zone}`]: S.self.zones[zone], inv:S.self.inv, updatedAt:serverTimestamp() }
@@ -3621,9 +3622,20 @@ async function finishApply(a) {
     }
   } catch(e) {
     console.error('Treatment failed to sync to Firestore:', e)
+    syncError = e
   }
 
-  sfx('treatment-done')
+  // A failed write used to fail SILENTLY — the treat panel would show the
+  // treatment as applied (from local state) until the next realtime
+  // snapshot quietly reverted it back to the server's untouched copy, with
+  // no explanation. Surface it instead so it's never a mystery.
+  if(syncError) {
+    sfx('error')
+    callout('treatment failed to save, retry')
+    openInlineModal('sync-err','<div class="modal-box" style="max-width:340px;border-color:var(--red)" onclick="closeInlineModal(\'sync-err\')"><div class="modal-head"><div class="orb" style="font-size:13px;font-weight:700;color:var(--red)">TREATMENT NOT SAVED</div></div><div style="padding:14px 16px;font-size:12px;color:var(--redsoft)">This treatment applied locally but failed to sync to the server (' + (syncError.message||'unknown error').replace(/'/g,"") + '). It will likely revert — check your connection and try again.</div></div>')
+  } else {
+    sfx('treatment-done')
+  }
   // Refresh whichever body map/overview this treatment actually applied to
   // — the patient card behind the treat modal was only hidden, not rebuilt,
   // so it needs its own explicit redraw or it'd show stale state once the
