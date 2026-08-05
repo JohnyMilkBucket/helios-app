@@ -3450,6 +3450,10 @@ window.startApply = (zone, treatment, target) => {
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
     : { zones:S.self.zones, inj:S.self.zones[zone]?.inj }
+  // One TQ per limb — this shouldn't be reachable via the UI (the button
+  // switches to REMOVE TQ once a zone is tourniqueted) but guard it directly
+  // too, in case a stale render or a race ever leaves the old button live.
+  if(treatment==='tourniquet' && patient?.zones?.[zone]?.tq) return
   const frag = patient?.zones?.[zone]?.frag
   let dur = APPLY_MS[treatment]||3000
   if(treatment==='bandage') dur = frag ? APPLY_MS.bandage_frag : APPLY_MS.bandage_bleed
@@ -3758,14 +3762,16 @@ function startTickers() {
     }
   },5000)
 
-  // Blood drain — rate is the sum of every actively-bleeding zone's own
-  // tier-based bleedRate (see INJ), so a single low-velocity arm wound
-  // drains far slower than a torso hit, and multiple wounds stack.
+  // Blood drain — rate is the AVERAGE of every actively-bleeding zone's own
+  // tier-based bleedRate (see INJ), applied once per second. Averaging
+  // (rather than summing) keeps a flat, predictable %/s regardless of how
+  // many wounds are open at once, instead of blood loss compounding with
+  // every extra hit.
   setInterval(async () => {
     if(!S.cardId||!S.self.down||S.self.dead) return
     const bleedingZones = Object.values(S.self.zones).filter(s=>s.bleeding&&!s.tq)
     if(bleedingZones.length){
-      const rate = bleedingZones.reduce((sum,s)=>sum+(INJ[s.inj]?.bleedRate ?? 1.0), 0)
+      const rate = bleedingZones.reduce((sum,s)=>sum+(INJ[s.inj]?.bleedRate ?? 1.0), 0) / bleedingZones.length
       S.self.bloodPct=Math.max(0,S.self.bloodPct-rate)
       updateBodyFigure()
 
