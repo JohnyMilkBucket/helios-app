@@ -3409,7 +3409,12 @@ window.openTreat = (zone, target='self') => {
     const cnt = t.noInv ? null : (inv[t.id]||0)
     const blocked = (!t.noInv && cnt<=0)||(t.locked===true)||(!!S.applying && S.applying.treatment!==t.id)
     const isActive = S.applying?.treatment===t.id
-    return `<button class="treat-btn" ${blocked?'disabled':''} onclick="startApply('${zone}','${t.id}','${target}')"
+    // Deliberately NOT using the native `disabled` attribute here — a
+    // disabled button eats the click entirely (no onclick, no JS runs at
+    // all), which is exactly what made "out of supply" and other blocked
+    // states look completely dead with zero feedback. startApply() itself
+    // still refuses to start and now explains why via blockTreatment().
+    return `<button class="treat-btn" onclick="startApply('${zone}','${t.id}','${target}')"
       style="border-color:${blocked?'rgba(91,139,181,.22)':t.color};background:${isActive?t.color+'20':blocked?'transparent':t.color+'08'};color:${blocked?'var(--accent)':t.color}">
       ${svgItemIcon(t.id==='remove_tourniquet'?'tourniquet':t.id,18,t.color)}
       <div class="orb" style="font-size:10px;font-weight:700;margin-top:6px;letter-spacing:.05em">${t.label}</div>
@@ -3444,12 +3449,23 @@ window.closePatientCard = () => {
 
 let applyInterval = null
 
+// Every early-return below used to fail completely silently — no sound, no
+// text, nothing — which is indistinguishable from the button just being
+// broken. The single most likely real trigger is simply being out of that
+// item (a busy medic burns through a loadout fast); this makes every one of
+// these cases visible instead of silent.
+function blockTreatment(msg) {
+  sfx('error')
+  const el = $('treat-status')
+  if(el) el.innerHTML = `<div style="font-size:12px;color:var(--red);font-weight:700">⚠ ${msg}</div>` + el.innerHTML
+}
+
 window.startApply = (zone, treatment, target) => {
-  if(S.applying) return
-  if(treatment==='tourniquet'&&!LIMBS.includes(zone)) return
-  if(treatment!=='remove_tourniquet' && (S.self.inv[treatment]||0)<=0) return
+  if(S.applying) { blockTreatment('Already treating — wait for it to finish or cancel it') ; return }
+  if(treatment==='tourniquet'&&!LIMBS.includes(zone)) { blockTreatment('Tourniquets only go on limbs') ; return }
+  if(treatment!=='remove_tourniquet' && (S.self.inv[treatment]||0)<=0) { blockTreatment('OUT OF SUPPLY — you have none of this left') ; return }
   const targetDead = target==='patient' ? S.patients.find(p=>p.id===S.openPatientId)?.dead : S.self.dead
-  if(targetDead) return
+  if(targetDead) { blockTreatment('Deceased — no treatment applies') ; return }
 
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
@@ -3457,7 +3473,7 @@ window.startApply = (zone, treatment, target) => {
   // One TQ per limb — this shouldn't be reachable via the UI (the button
   // switches to REMOVE TQ once a zone is tourniqueted) but guard it directly
   // too, in case a stale render or a race ever leaves the old button live.
-  if(treatment==='tourniquet' && patient?.zones?.[zone]?.tq) return
+  if(treatment==='tourniquet' && patient?.zones?.[zone]?.tq) { blockTreatment('Already has a tourniquet on') ; return }
   const frag = patient?.zones?.[zone]?.frag
   let dur = APPLY_MS[treatment]||3000
   if(treatment==='bandage') dur = frag ? APPLY_MS.bandage_frag : APPLY_MS.bandage_bleed
