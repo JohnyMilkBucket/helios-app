@@ -3417,6 +3417,7 @@ window.openTreat = (zone, target='self') => {
         <span style="color:${t.color}">${t.timeSec}s</span>
         ${t.noInv ? '' : `<span style="color:var(--accent)">·</span><span style="color:${cnt>0?'#a8b8cc':'var(--red)'}">×${cnt}</span>`}
       </div>
+      ${t.id==='stim' ? `<div style="font-size:9px;margin-top:3px;color:var(--red);min-height:12px">${t.desc}</div>` : ''}
     </button>`
   }).join('')
 
@@ -3500,95 +3501,94 @@ window.startApply = (zone, treatment, target) => {
   },60)
 }
 
+function freshZone() {
+  return {inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,tqAppliedAt:null,tqNumb:false,limbLost:false}
+}
+
+// A wound needs as many bandage applications as its severity tier calls
+// for (BANDAGES_NEEDED) before it's actually packed — the player is never
+// told the number up front, they just keep bandaging until it stops.
+// Packing "counts" even under a live TQ, so hitting the full count while a
+// TQ is on still marks it safe to pull.
+function applyBandageToZone(zs) {
+  if(!zs) return
+  zs.bandagesApplied = (zs.bandagesApplied||0)+1
+  const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
+  if(zs.bandagesApplied>=need) { zs.bleeding=false; zs.bandaged=true }
+}
+
+// Fresh TQ — circulation loss hasn't set in yet, so the limb stays usable
+// until the numbness clock (TQ_WARN_MS, tracked separately as tqNumb)
+// catches up to it.
+function applyTourniquetToZone(zs) {
+  zs.tq=true; zs.bleeding=false; zs.tqAppliedAt=Date.now(); zs.tqNumb=false
+}
+
+// No inventory cost — pulling a TQ only resumes bleeding if the wound was
+// never packed with a bandage while it was on. Feeling comes back to the
+// limb the moment the TQ is off.
+function removeTourniquetFromZone(zs) {
+  zs.tq=false; zs.tqAppliedAt=null; zs.tqNumb=false
+  zs.bleeding = zs.bandaged ? false : !!zs.inj
+}
+
+// Unconscious -> stim wakes them up clean, no risk. Conscious -> stim is an
+// overdose: heart rate spikes into the 200-250 danger band, and every
+// additional dose taken while still in that band stacks another +2% on top
+// of the running chance of cardiac death (rolled on that dose).
+function applyStimTo(obj) {
+  if(obj.uncon) {
+    obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95
+  } else {
+    obj.odStacks=(obj.odStacks||0)+1
+    obj.overdosing=true
+    obj.hr=200+Math.floor(Math.random()*51) // 200-250
+    if(Math.random() < Math.min(1, 0.02*obj.odStacks)) {
+      obj.dead=true; obj.uncon=true; obj.overdosing=false; obj.hr=0
+    }
+  }
+}
+
+// Clears an active overdose outright (that's the point of countering a
+// stim with a depressant) — otherwise it's just a normal HR-lowering aid.
+function applyDepressantTo(obj) {
+  if(obj.overdosing) { obj.hr=78; obj.overdosing=false; obj.odStacks=0 }
+  else obj.hr=55
+}
+
 async function finishApply(a) {
   const {zone,treatment,target,patientId} = a
   const isSelf = target!=='patient'
   const patient = isSelf ? null : S.patients.find(p=>p.id===patientId)
-
-  const zoneDefault = () => ({inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,tqAppliedAt:null,tqNumb:false,limbLost:false})
-
-  // A wound needs as many bandage applications as its severity tier calls
-  // for (BANDAGES_NEEDED) before it's actually packed — the player is never
-  // told the number up front, they just keep bandaging until it stops.
-  // Packing "counts" even under a live TQ, same as before, so hitting the
-  // full count while a TQ is on still marks it safe to pull.
-  function applyBandage(zs) {
-    if(!zs) return
-    zs.bandagesApplied = (zs.bandagesApplied||0)+1
-    const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
-    if(zs.bandagesApplied>=need) { zs.bleeding=false; zs.bandaged=true }
-  }
+  const targetObj = isSelf ? S.self : patient
 
   if(treatment==='bandage') {
-    if(isSelf) applyBandage(S.self.zones[zone])
-    else applyBandage(patient?.zones?.[zone])
+    applyBandageToZone(targetObj?.zones?.[zone])
     S.self.inv.bandage = Math.max(0,(S.self.inv.bandage||0)-1)
   } else if(treatment==='tourniquet'&&LIMBS.includes(zone)) {
-    // Fresh TQ — circulation loss hasn't set in yet, so the limb stays
-    // usable until the numbness clock (TQ_WARN_MS) catches up to it.
-    if(isSelf) {
-      if(!S.self.zones[zone]) S.self.zones[zone]=zoneDefault()
-      S.self.zones[zone].tq=true; S.self.zones[zone].bleeding=false; S.self.zones[zone].tqAppliedAt=Date.now(); S.self.zones[zone].tqNumb=false
-    } else if(patient) {
-      if(!patient.zones[zone]) patient.zones[zone]=zoneDefault()
-      patient.zones[zone].tq=true; patient.zones[zone].bleeding=false; patient.zones[zone].tqAppliedAt=Date.now(); patient.zones[zone].tqNumb=false
+    if(targetObj) {
+      if(!targetObj.zones[zone]) targetObj.zones[zone]=freshZone()
+      applyTourniquetToZone(targetObj.zones[zone])
     }
     S.self.inv.tourniquet = Math.max(0,(S.self.inv.tourniquet||0)-1)
   } else if(treatment==='remove_tourniquet') {
-    // No inventory cost — pulling a TQ only resumes bleeding if the wound
-    // was never packed with a bandage while it was on. Feeling comes back
-    // to the limb the moment the TQ is off.
-    if(isSelf) {
-      const zs = S.self.zones[zone]
-      if(zs) { zs.tq=false; zs.tqAppliedAt=null; zs.tqNumb=false; zs.bleeding = zs.bandaged ? false : !!zs.inj }
-    } else if(patient?.zones?.[zone]) {
-      const zs = patient.zones[zone]
-      zs.tqNumb=false
-      zs.tq=false; zs.tqAppliedAt=null; zs.bleeding = zs.bandaged ? false : !!zs.inj
-    }
+    const zs = targetObj?.zones?.[zone]
+    if(zs) removeTourniquetFromZone(zs)
   } else if(treatment==='splint') {
     // Fixes the fracture flag only, doesn't touch bleeding
-    if(isSelf) { if(S.self.zones[zone]) S.self.zones[zone].fracture=false }
-    else if(patient?.zones?.[zone]) { patient.zones[zone].fracture=false }
+    if(targetObj?.zones?.[zone]) targetObj.zones[zone].fracture=false
     S.self.inv.splint = Math.max(0,(S.self.inv.splint||0)-1)
   } else if(treatment==='stim') {
-    // Unconscious -> stim wakes them up clean, no risk. Conscious -> stim is
-    // an overdose: heart rate spikes into the 200-250 danger band, and every
-    // additional dose taken while still in that band stacks another +2% on
-    // top of the running chance of cardiac death (rolled on that dose).
-    const wasUncon = isSelf ? S.self.uncon : patient?.uncon
-    function applyStim(obj) {
-      if(wasUncon) {
-        obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95
-      } else {
-        obj.odStacks=(obj.odStacks||0)+1
-        obj.overdosing=true
-        obj.hr=200+Math.floor(Math.random()*51) // 200-250
-        if(Math.random() < Math.min(1, 0.02*obj.odStacks)) {
-          obj.dead=true; obj.uncon=true; obj.overdosing=false; obj.hr=0
-        }
-      }
-    }
-    if(isSelf) {
-      applyStim(S.self)
-      if(S.self.dead) silenceAllRadios()
-    } else if(patient) {
-      applyStim(patient)
+    if(targetObj) {
+      applyStimTo(targetObj)
+      if(isSelf && S.self.dead) silenceAllRadios()
     }
     S.self.inv.stim = Math.max(0,(S.self.inv.stim||0)-1)
   } else if(treatment==='depressant') {
-    // Clears an active overdose outright (that's the point of countering a
-    // stim with a depressant) — otherwise it's just a normal HR-lowering aid.
-    function applyDepressant(obj) {
-      if(obj.overdosing) { obj.hr=78; obj.overdosing=false; obj.odStacks=0 }
-      else obj.hr=55
-    }
-    if(isSelf) applyDepressant(S.self)
-    else if(patient) applyDepressant(patient)
+    if(targetObj) applyDepressantTo(targetObj)
     S.self.inv.depressant = Math.max(0,(S.self.inv.depressant||0)-1)
   } else if(treatment==='blood') {
-    if(isSelf) S.self.bloodPct = Math.min(100,(S.self.bloodPct||0)+40)
-    else if(patient) patient.bloodPct = Math.min(100,(patient.bloodPct||0)+40)
+    if(targetObj) targetObj.bloodPct = Math.min(100,(targetObj.bloodPct||0)+40)
     S.self.inv.blood = Math.max(0,(S.self.inv.blood||0)-1)
   }
 
