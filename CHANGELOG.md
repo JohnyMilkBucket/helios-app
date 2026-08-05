@@ -3,6 +3,21 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.4
+- Added a short tutorial for every tab (Operations, Medical, Comms, ORBAT,
+  Roles, Joint Ops, Admin, Settings). Shows once automatically the first
+  time you open that tab, can be skipped, and can be replayed any time
+  from Settings → Tutorials.
+
+## v1.4.3
+- Added an in-app "What's New" panel (auto-shows once per update, plus a
+  button in Settings to view anytime) and this changelog.
+- Login screen now shows the real running version instead of a stale
+  hardcoded "v1.0".
+- Fixed a real bug affecting every confirm dialog in the app: close/cancel
+  buttons were silently throwing an error and doing nothing (only clicking
+  the backdrop worked). All modal buttons now work correctly.
+
 ## v1.4.2
 - Fixed the PTT "transmit" glow disappearing after ~1 second even while
   still holding the key down.

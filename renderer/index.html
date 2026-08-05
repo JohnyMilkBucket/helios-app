@@ -903,6 +903,13 @@ html.popout-mode #content{padding:10px 12px}
               <div id="settings-update-status" style="font-size:11px;color:var(--accent)">Auto-updates on — Helios checks for new versions automatically.</div>
             </div>
 
+            <!-- TUTORIALS -->
+            <div class="panel" style="padding:15px">
+              <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">TUTORIALS</div>
+              <div style="font-size:11px;color:#a8b8cc;margin-bottom:10px">Each tab shows its walkthrough once automatically. Replay any of them here.</div>
+              <div id="settings-tutorials-list" style="display:flex;flex-direction:column;gap:6px"></div>
+            </div>
+
           </div>
         </div>
 
@@ -1379,6 +1386,13 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.4', items:[
+    'Added a short tutorial for every tab — shows once automatically, can be skipped, and can be replayed from Settings → Tutorials.',
+  ]},
+  { v:'1.4.3', items:[
+    'Added this "What\'s New" panel and a live version display on the login screen.',
+    'Fixed a bug where every confirm dialog\'s close/cancel button silently did nothing.',
+  ]},
   { v:'1.4.2', items:[
     'Fixed the PTT transmit glow disappearing after ~1s even while still holding the key.',
     'Fixed the "HOLD X TO TRANSMIT" hint not updating after rebinding your PTT key.',
@@ -1403,6 +1417,53 @@ const CHANGELOG = [
     'Found and fixed the real bug behind bandages/tourniquets not sticking — a Firestore write bug that was silently dropping every treatment.',
   ]},
 ]
+
+// ── TUTORIALS ─────────────────────────────────────────────────────────────
+// One short walkthrough per tab. Auto-shown the first time a member opens
+// that tab (per-machine, via localStorage — see maybeShowTutorial), can be
+// skipped, and can be replayed any time from Settings → Tutorials.
+const TUTORIALS = {
+  operations: { title:'OPERATIONS', steps:[
+    'Operations are how a mission gets tracked — casualties, supply usage, and the roster all reset around them.',
+    'An admin starts an Operation to roster the members taking part. Starting one refills everyone rostered to their role\'s full supply loadout.',
+    'From that point on, supplies only go down — a medic using a bandage or tourniquet actually spends it. Nothing auto-refills again until the next Operation starts.',
+    'Admins have a QUICK TEST OP button for a disposable, no-commitment test run — good for trying things out without touching a real roster.',
+  ]},
+  medical: { title:'MEDICAL', steps:[
+    'The body map shows injury state per zone. Tap a zone to open treatment options for whoever\'s selected.',
+    'Bleeding zones need bandages to pack — worse wounds need more than one. Fractures need a splint; heavy bleeds need a tourniquet before they\'ll stop.',
+    'A tourniquet buys time but isn\'t free — leave it on too long and the limb starts taking damage. Watch the countdown.',
+    'Stims fix being unconscious but push heart rate up — stacking doses makes it worse and can lead to cardiac arrest over time. Depressants bring it back down.',
+    'Pop the medical panel out into its own window with the pop-out button if you want it on a second monitor while you run the rest of the app.',
+  ]},
+  comms: { title:'COMMS', steps:[
+    'Join a radio net to talk on it — you can be on up to two channels at once if your role allows multi-channel.',
+    'Hold your PTT key to transmit. You can rebind it, and test each ear independently from the audio settings.',
+    'This tab is marked as a work in progress — the core join/talk/listen path works, but voice quality is still being verified end-to-end.',
+  ]},
+  orbat: { title:'ORBAT', steps:[
+    'ORBAT is the order of battle — units and sub-units, with members assigned into each one.',
+    'Admins create units and sub-units from here, then assign rostered members into them so the chain of command is visible to everyone.',
+    'Anyone not yet assigned to a unit shows up in the unassigned banner at the top, so nobody gets lost in the shuffle.',
+  ]},
+  roles: { title:'ROLES', steps:[
+    'Roles define what a member can do — treat other players, create Operations, edit brevity codes, or administer the card — plus their starting supply loadout.',
+    'Admins create roles here and assign them to members. A member\'s loadout is refilled to their role\'s numbers whenever an Operation starts.',
+  ]},
+  jointops: { title:'JOINT OPERATIONS', steps:[
+    'Joint Ops let two or more separate factions (cards) coordinate on the same mission without merging their rosters.',
+    'One side hosts and shares a join code; other factions join with that code. Casualties reported by any participating faction show up on the shared board.',
+    'Leaving a Joint Op only removes your faction from that coordination layer — it doesn\'t touch your own card\'s roster or data.',
+  ]},
+  admin: { title:'ADMIN PANEL', steps:[
+    'Owner/admin-only controls: rename the card, manage the invite code, and handle members, licensing, and other card-wide settings from one place.',
+    'Regenerating the invite code immediately invalidates the old one — anyone who hasn\'t joined yet will need the new code.',
+  ]},
+  settings: { title:'SETTINGS', steps:[
+    'Overlay behavior (always-on-top, opacity, click-through), audio devices, and PTT keybinds all live here.',
+    'The Software panel shows your running version, lets you check for updates on demand, and replay any of these tutorials.',
+  ]},
+}
 
 // ── GLOBAL STATE ──────────────────────────────────────────────────────────
 const S = {
@@ -1828,10 +1889,15 @@ async function enterCard(cardId) {
   }
 
   $('app').style.display = 'flex'
-  // "What's New" only fires here, never over the login/card-select screens
-  // — those are .fullscreen (z-index:900), well above a modal's z-index:50,
-  // so a modal opened while they're showing would render invisibly behind them.
-  if (APP_VERSION) maybeShowWhatsNewOnUpdate(APP_VERSION)
+  // "What's New" and the first-run tutorial both only fire here, never over
+  // the login/card-select screens — those are .fullscreen (z-index:900),
+  // well above a modal's z-index:50, so a modal opened while they're
+  // showing would render invisibly behind them. Only one popup fires: if
+  // there's nothing new to show, fall back to the Operations tutorial
+  // (the default landing tab) if this install hasn't seen it yet — never
+  // stack both at once.
+  const shownWhatsNew = APP_VERSION ? maybeShowWhatsNewOnUpdate(APP_VERSION) : false
+  if (!shownWhatsNew) maybeShowTutorial('operations')
 
   // Update member online status
   await setDoc(doc(db,'cards',cardId,'members',S.user.uid),{online:true},{merge:true})
@@ -2022,6 +2088,7 @@ window.switchTab = (id,btn) => {
   $('tab-'+id).classList.add('active')
   btn.classList.add('active')
   sfx('tab')
+  maybeShowTutorial(id)
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4744,11 +4811,72 @@ function maybeShowWhatsNewOnUpdate(currentVersion) {
   const KEY = 'heliosLastSeenVersion'
   const last = localStorage.getItem(KEY)
   localStorage.setItem(KEY, currentVersion)
-  if (!last || last === currentVersion) return // first-ever launch, or unchanged
+  if (!last || last === currentVersion) return false // first-ever launch, or unchanged
   const idx = CHANGELOG.findIndex(e => e.v === last)
   const newEntries = idx === -1 ? CHANGELOG : CHANGELOG.slice(0, idx)
-  if (newEntries.length) renderWhatsNewModal(newEntries)
+  if (!newEntries.length) return false
+  renderWhatsNewModal(newEntries)
+  return true
 }
+
+// ── TUTORIALS: modal + state ────────────────────────────────────────────
+function getTutorialsSeen() {
+  try { return JSON.parse(localStorage.getItem('heliosTutorialsSeen')||'[]') } catch { return [] }
+}
+function markTutorialSeen(tabId) {
+  const seen = new Set(getTutorialsSeen())
+  seen.add(tabId)
+  localStorage.setItem('heliosTutorialsSeen', JSON.stringify([...seen]))
+}
+
+function renderTutorialModal(tabId, stepIdx) {
+  const t = TUTORIALS[tabId]
+  if (!t) return
+  const total = t.steps.length
+  const isLast = stepIdx === total-1
+  openInlineModal('tutorial-modal', `
+    <div class="modal-box" style="max-width:420px" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div class="orb" style="font-size:13px;font-weight:700">TUTORIAL — ${t.title}</div>
+        <div style="font-size:9px;color:var(--accent);letter-spacing:.15em;margin-top:3px">STEP ${stepIdx+1} OF ${total}</div>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12px;color:#a8b8cc;line-height:1.7;min-height:44px">${t.steps[stepIdx]}</div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn" onclick="skipTutorial('${tabId}')" style="flex:1;padding:9px;font-size:10px">SKIP</button>
+          ${stepIdx>0?`<button class="btn" onclick="advanceTutorial('${tabId}',${stepIdx-1})" style="flex:1;padding:9px;font-size:10px">BACK</button>`:''}
+          <button class="btn btn-blue" onclick="${isLast?`finishTutorial('${tabId}')`:`advanceTutorial('${tabId}',${stepIdx+1})`}" style="flex:1;padding:9px;font-size:10px">${isLast?'DONE':'NEXT'}</button>
+        </div>
+      </div>
+    </div>
+  `)
+}
+window.advanceTutorial = (tabId, stepIdx) => { sfx('click'); renderTutorialModal(tabId, stepIdx) }
+window.skipTutorial = (tabId) => { sfx('click'); markTutorialSeen(tabId); closeInlineModal('tutorial-modal') }
+window.finishTutorial = (tabId) => { sfx('success'); markTutorialSeen(tabId); closeInlineModal('tutorial-modal') }
+// Replay never marks-as-seen automatically until finished/skipped again —
+// same flow as a first-time view, just invoked manually.
+window.replayTutorial = (tabId) => { sfx('click'); renderTutorialModal(tabId, 0) }
+
+// Auto-shown the first time this tab is opened (per-machine). Never fires
+// twice for the same tab unless localStorage is cleared or the user
+// explicitly replays it from Settings.
+function maybeShowTutorial(tabId) {
+  if (!TUTORIALS[tabId]) return
+  if (getTutorialsSeen().includes(tabId)) return
+  renderTutorialModal(tabId, 0)
+}
+
+function renderTutorialsSettingsList() {
+  const el = $('settings-tutorials-list')
+  if (!el) return
+  el.innerHTML = Object.entries(TUTORIALS).map(([tabId,t]) => `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="setting-label">${t.title}</div>
+      <button class="btn" onclick="replayTutorial('${tabId}')" style="font-size:9px;padding:5px 10px">REPLAY</button>
+    </div>`).join('')
+}
+renderTutorialsSettingsList()
 
 // Generic confirm dialog — replaces all confirm() calls
 // onConfirm is called when user clicks YES
