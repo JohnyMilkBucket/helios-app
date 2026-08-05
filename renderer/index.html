@@ -3580,12 +3580,17 @@ function applyDepressantTo(obj) {
 
 async function finishApply(a) {
   const {zone,treatment,target,patientId} = a
+  console.log('[HELIOS DEBUG] finishApply ENTER', JSON.stringify(a))
   const isSelf = target!=='patient'
   const patient = isSelf ? null : S.patients.find(p=>p.id===patientId)
   const targetObj = isSelf ? S.self : patient
+  console.log('[HELIOS DEBUG] isSelf', isSelf, 'targetObj is S.self?', targetObj===S.self, 'zone state before:', JSON.stringify(targetObj?.zones?.[zone]))
 
   if(treatment==='bandage') {
-    applyBandageToZone(targetObj?.zones?.[zone])
+    const zs = targetObj?.zones?.[zone]
+    console.log('[HELIOS DEBUG] bandage branch, zs=', JSON.stringify(zs), 'typeof zs=', typeof zs)
+    applyBandageToZone(zs)
+    console.log('[HELIOS DEBUG] after applyBandageToZone, zs=', JSON.stringify(zs), 'S.self.zones[zone]=', JSON.stringify(S.self.zones[zone]))
     S.self.inv.bandage = Math.max(0,(S.self.inv.bandage||0)-1)
   } else if(treatment==='tourniquet'&&LIMBS.includes(zone)) {
     if(targetObj) {
