@@ -1905,6 +1905,7 @@ function subscribeAll(cardId) {
 
   // Own medical record
   S.listeners.push(onSnapshot(doc(db,'medical',cardId,'patients',S.user.uid), snap => {
+    console.log('[HELIOS DEBUG] own-record onSnapshot FIRED, fromCache=', snap.metadata.fromCache, 'hasPendingWrites=', snap.metadata.hasPendingWrites, 'zones=', JSON.stringify(snap.data()?.zones))
     if(snap.exists()) {
       const d = snap.data()
       const wasDead = S.self.dead
