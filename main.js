@@ -53,6 +53,16 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'))
   mainWindow.setMenuBarVisibility(false)
 
+  // frame:false hides the native menu bar, which is where the default
+  // DevTools shortcut normally lives — bind F12 explicitly so there's always
+  // a guaranteed way to actually see console errors, in dev AND packaged
+  // builds (this is not gated behind app.isPackaged on purpose).
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' && input.type === 'keyDown') {
+      mainWindow.webContents.toggleDevTools()
+    }
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
     // Don't leave orphaned floating panels behind once the main app closes.
