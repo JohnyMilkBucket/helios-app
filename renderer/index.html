@@ -1325,6 +1325,13 @@ import {
   tickTourniquetClock, tickBloodDrain, clearPatient as medClearPatient, clearAllPatients as medClearAllPatients,
 } from './js/medical.js'
 
+// ── ROLES ───────────────────────────────────────────────────────────────────
+import {
+  DEFAULT_LD, getEffectiveRoles as pureGetEffectiveRoles, resolveRole, createRole, deleteRole as roleDeleteRole,
+  moveRole as roleMoveRole, updateRoleLoadout as roleUpdateLoadout, saveRolePerms as roleSavePerms,
+  applyRoleChange as roleApplyChange,
+} from './js/roles.js'
+
 // ── INIT ──────────────────────────────────────────────────────────────────
 const firebaseApp = initializeApp(FIREBASE_CONFIG)
 const auth = getAuth(firebaseApp)
@@ -2669,21 +2676,8 @@ window.deleteBrev = async (id) => { await deleteDoc(doc(db,'cards',S.cardId,'bre
 // formally create it there). Admin's role-assignment dropdown reuses this
 // exact list so it can never offer a role that isn't actually in the Roles
 // tab, and never hide one that is.
-function getEffectiveRoles() {
-  const collectionRoleNames = new Set(S.cardRoles.map(r=>r.name))
-  const memberOnlyRoles = [...new Set(S.members.map(m=>m.role).filter(Boolean))]
-    .filter(r => !collectionRoleNames.has(r))
-    .map(name => {
-      const rep = S.members.find(m=>m.role===name)
-      return { id:'member-'+name, name, color:rep?.color||'#a8b8cc',
-        ld:rep?.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0},
-        isAdmin:rep?.isAdmin||false, canTreatOthers:rep?.canTreatOthers||false,
-        canCreateOps:rep?.canCreateOps||false, canEditBrevity:rep?.canEditBrevity||false,
-        canMultiChan:rep?.canMultiChan||false,
-      }
-    })
-  return [...S.cardRoles, ...memberOnlyRoles].sort((a,b)=>(a.order??999)-(b.order??999))
-}
+// Thin wrapper — the actual logic lives in ./js/roles.js as a pure function.
+function getEffectiveRoles() { return pureGetEffectiveRoles(S.cardRoles, S.members) }
 
 function renderRoles() {
   const el = $('roles-list')
@@ -2766,7 +2760,7 @@ function renderRoles() {
 window.deleteRole = async (roleId) => {
   if(!roleId || roleId.startsWith('member-')) return
   confirmInlineModal('Delete Role?','Members with this role keep it until reassigned.',true,async()=>{
-    await deleteDoc(doc(db,'cards',S.cardId,'roles',roleId))
+    await roleDeleteRole(db, S.cardId, roleId)
   })
 }
 
@@ -2774,34 +2768,15 @@ window.deleteRole = async (roleId) => {
 window.updateRoleLoadoutByName = async (roleName, input) => {
   const key = input.dataset.key
   const val = Math.max(0, parseInt(input.value)||0)
-  // Update collection role doc if it exists
-  const roleDoc = S.cardRoles.find(r=>r.name===roleName)
-  if(roleDoc) {
-    await setDoc(doc(db,'cards',S.cardId,'roles',roleDoc.id),
-      {ld:{...(roleDoc.ld||{}), [key]:val}}, {merge:true})
-  }
-  // Update all members with that role
-  const affected = S.members.filter(m=>m.role===roleName)
-  for(const m of affected) {
-    await setDoc(doc(db,'cards',S.cardId,'members',m.id),
-      {ld:{...(m.ld||{}), [key]:val}}, {merge:true})
-  }
+  await roleUpdateLoadout(db, S.cardId, S.cardRoles, S.members, roleName, key, val)
 }
 
-window.updateRoleLoadout = async (roleName, input) => {
-  const key = input.dataset.key
-  const val = Math.max(0, parseInt(input.value)||0)
-  const affected = S.members.filter(m=>m.role===roleName)
-  for(const m of affected) {
-    const newLd = {...(m.ld||{}), [key]:val}
-    await setDoc(doc(db,'cards',S.cardId,'members',m.id),{ld:newLd},{merge:true})
-  }
-}
-
+// Resolves from the role doc first (falls back to a representative member
+// only for legacy roles) — a brand-new role with 0 members assigned can
+// still have its permissions edited, which used to be impossible.
 window.editRolePerms = (roleName) => {
-  const mem = S.members.find(m=>m.role===roleName)
-  if(!mem) return
-  const ld = mem.ld||{}
+  const mem = resolveRole(S.cardRoles, S.members, roleName)
+  const ld = mem.ld
 
   // Build modal HTML
   document.getElementById('role-edit-modal')?.remove()
@@ -2850,29 +2825,12 @@ window.saveRolePerms = async (roleName) => {
     canEditBrevity: document.getElementById('rp-canEditBrevity')?.checked||false,
     canMultiChan:   document.getElementById('rp-canMultiChan')?.checked||false,
   }
-  // Update the role collection doc if it exists
-  const roleDoc = S.cardRoles.find(r=>r.name===roleName)
-  if(roleDoc) {
-    await setDoc(doc(db,'cards',S.cardId,'roles',roleDoc.id), perms, {merge:true})
-  }
-  // Update all members with that role
-  const affected = S.members.filter(m=>m.role===roleName)
-  for(const m of affected) {
-    await setDoc(doc(db,'cards',S.cardId,'members',m.id), perms, {merge:true})
-  }
+  await roleSavePerms(db, S.cardId, S.cardRoles, S.members, roleName, perms)
   document.getElementById('role-edit-modal')?.remove()
 }
 
 window.moveRole = async (roleId, dir) => {
-  if(!roleId || roleId.startsWith('member-') || roleId.startsWith('mem-')) return
-  const sorted = [...S.cardRoles].sort((a,b)=>(a.order??999)-(b.order??999))
-  const idx    = sorted.findIndex(r=>r.id===roleId)
-  if(idx<0) return
-  const swapIdx = dir==='up' ? idx-1 : idx+1
-  if(swapIdx<0||swapIdx>=sorted.length) return
-  const a = sorted[idx], b = sorted[swapIdx]
-  await setDoc(doc(db,'cards',S.cardId,'roles',a.id),{order:swapIdx},{merge:true})
-  await setDoc(doc(db,'cards',S.cardId,'roles',b.id),{order:idx},{merge:true})
+  await roleMoveRole(db, S.cardId, S.cardRoles, roleId, dir)
   sfx('click')
 }
 
@@ -2914,6 +2872,25 @@ window.showNewRoleModal = () => {
               <label class="toggle"><input type="checkbox" id="nr-${p.key}"/><span class="toggle-slider"></span></label>
             </div>
           `).join('')}
+          <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-top:4px">MED LOADOUT</div>
+          <div class="ld-grid">
+            ${[
+              {k:'bandage',    ico:svgItemIcon('bandage',13,'#4ade80'), color:'#4ade80'},
+              {k:'tourniquet', ico:svgTQ(13),                           color:'#fbbf24'},
+              {k:'splint',     ico:svgFracture(13),                     color:'#a78bfa'},
+              {k:'stim',       ico:svgStim(13),                         color:'#a78bfa'},
+              {k:'depressant', ico:svgDep(13),                          color:'#60a5fa'},
+              {k:'blood',      ico:svgBag(13,1),                        color:'#dc2626'},
+            ].map(it=>`
+              <div class="ld-cell">
+                ${it.ico}
+                <input type="number" min="0" max="99" value="0" id="nr-ld-${it.k}"
+                  style="width:100%;text-align:center;padding:2px 0;font-size:11px;
+                    background:rgba(8,18,36,.8);border:1px solid ${it.color};
+                    color:${it.color};outline:none;font-family:'Orbitron',sans-serif;-webkit-app-region:no-drag"/>
+              </div>`).join('')}
+          </div>
+          <div style="font-size:9px;color:var(--accent);margin-top:-4px">Starting supply counts — a role with no loadout set can't treat anything.</div>
           <button class="btn btn-green" onclick="createNewRole()" style="width:100%;padding:10px;font-size:10px;letter-spacing:.22em;margin-top:4px">CREATE ROLE ▸</button>
         </div>
       </div>
@@ -2932,11 +2909,13 @@ window.createNewRole = async () => {
     canEditBrevity: document.getElementById('nr-canEditBrevity')?.checked||false,
     canMultiChan:   document.getElementById('nr-canMultiChan')?.checked||false,
   }
-  // Save role as a card-level document
+  const ld = {}
+  for(const k of ['bandage','tourniquet','splint','stim','depressant','blood']) {
+    ld[k] = Math.max(0, parseInt(document.getElementById('nr-ld-'+k)?.value)||0)
+  }
   sfx('success')
-  await addDoc(collection(db,'cards',S.cardId,'roles'),{
-    name, color, ...perms, order: S.cardRoles.length,
-    ld:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0},
+  await createRole(db, S.cardId, {
+    name, color, ...perms, order: S.cardRoles.length, ld,
     createdAt:serverTimestamp()
   })
   document.getElementById('new-role-modal')?.remove()
@@ -4925,19 +4904,7 @@ window.showSelfDemoteConfirm = (memberId, newRole, hasOtherOwner) => {
 }
 
 window.applyRoleChange = async (memberId, newRole) => {
-  // Pull role data from collection first, then fall back to member data
-  const roleDoc = S.cardRoles.find(r=>r.name===newRole)
-  const ref     = S.members.find(m=>m.role===newRole)
-  const color   = roleDoc?.color || ref?.color || '#a8b8cc'
-  const ld      = roleDoc?.ld || ref?.ld || {bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
-  const perms   = {
-    isAdmin:        roleDoc?.isAdmin        ?? (['OWNER','ADMIN'].includes(newRole) || ref?.isAdmin || false),
-    canTreatOthers: roleDoc?.canTreatOthers ?? (['MEDIC'].includes(newRole) || ref?.canTreatOthers || false),
-    canCreateOps:   roleDoc?.canCreateOps   ?? (['OWNER','ADMIN','OPERATIONS'].includes(newRole) || ref?.canCreateOps || false),
-    canEditBrevity: roleDoc?.canEditBrevity ?? (['OWNER','ADMIN','OPERATIONS'].includes(newRole) || ref?.canEditBrevity || false),
-    canMultiChan:   roleDoc?.canMultiChan   ?? (['JTAC'].includes(newRole) || ref?.canMultiChan || false),
-  }
-  await setDoc(doc(db,'cards',S.cardId,'members',memberId), {role:newRole,color,...perms,ld}, {merge:true})
+  await roleApplyChange(db, S.cardId, S.cardRoles, S.members, memberId, newRole)
   sfx('click')
 }
 
