@@ -1,0 +1,60 @@
+# Changelog
+
+All notable changes to Helios are documented here. Versions correspond to
+GitHub releases.
+
+## v1.4.2
+- Fixed the PTT "transmit" glow disappearing after ~1 second even while
+  still holding the key down.
+- Fixed the "HOLD X TO TRANSMIT" hint not updating when you rebind your
+  PTT key — it used to keep showing the old key forever.
+
+## v1.4.1
+- Rebuilt radio/comms (channel join/leave, PTT, ear routing, mic device +
+  test) into its own module for stability.
+
+## v1.4.0
+- Medical supplies are now persistent per Operation: using a bandage or
+  tourniquet actually uses it up. Reviving someone no longer refills their
+  supplies — only starting a new Operation resets everyone's loadout.
+- Death screen now shows the real cause (headshot / bled out / cardiac
+  arrest) instead of always saying "bled out."
+- Comms tab marked as a work-in-progress (caution-tape banner) while voice
+  quality gets fully verified end-to-end.
+- Popping out the medical panel now opens a real standalone window instead
+  of an always-on-top overlay glued to the main app.
+- Reordered the top navigation tabs so they read in a sensible order.
+
+## v1.3.9
+- Stim overdose is now a gradual mechanic: heart rate climbs to cardiac
+  arrest over about 30 seconds instead of an instant chance roll. Stacking
+  more doses speeds up the climb; a depressant still clears it instantly if
+  used in time.
+
+## v1.3.8
+- SPLINT is now always shown as a treatment option, greyed out when there's
+  no fracture to fix, instead of disappearing entirely.
+
+## v1.3.6
+- Found and fixed the real root cause of bandages/tourniquets not sticking:
+  a Firestore write bug (`setDoc` + `merge` doesn't treat a dotted field
+  name as a nested path) was silently dropping every treatment write.
+  Switched every affected write to `updateDoc`, which fixes it correctly.
+  (v1.3.0–v1.3.7 covers the investigation and a rewrite that was briefly
+  reverted after exposing this same pre-existing bug — 1.3.6 is the actual
+  fix.)
+
+## v1.2.x series
+- Tiered tourniquet impairment with audio callouts, rebalanced head-hit
+  lethality, averaged multi-wound bleed rate, guarded against
+  double-applying a tourniquet, and stopped treatment buttons from
+  silently eating clicks when blocked. General medical-system hardening
+  across this series.
+
+## v1.1.0
+- Overhauled the medical system, fixed a voice permissions bug, and
+  reworked the patient-card UX.
+
+## v1.0.1
+- Trauma card overhaul, medical desync/soft-lock fixes, auto-update
+  support, and ORBAT role assignment.

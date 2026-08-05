@@ -285,7 +285,7 @@ html.popout-mode #content{padding:10px 12px}
   <div class="auth-box">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="80" height="80" style="display:block;margin:0 auto 14px"><defs><radialGradient id="lbg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#1a2f52"/><stop offset="100%" stop-color="#050b18"/></radialGradient><radialGradient id="lglow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#5b8bb5" stop-opacity="0.4"/><stop offset="100%" stop-color="#5b8bb5" stop-opacity="0"/></radialGradient><filter id="lblur"><feGaussianBlur stdDeviation="3"/></filter></defs><circle cx="100" cy="100" r="100" fill="url(#lbg)"/><circle cx="100" cy="100" r="85" fill="url(#lglow)" filter="url(#lblur)"/><circle cx="100" cy="100" r="82" fill="none" stroke="#5b8bb5" stroke-width="1.5" opacity="0.6"/><g stroke="#8db3d4" stroke-width="2" opacity="0.7"><line x1="100" y1="18" x2="100" y2="30"/><line x1="100" y1="170" x2="100" y2="182"/><line x1="18" y1="100" x2="30" y2="100"/><line x1="170" y1="100" x2="182" y2="100"/><line x1="141" y1="27" x2="135" y2="37"/><line x1="59" y1="163" x2="65" y2="173"/><line x1="27" y1="59" x2="37" y2="65"/><line x1="163" y1="136" x2="173" y2="141"/><line x1="27" y1="141" x2="37" y2="135"/><line x1="163" y1="64" x2="173" y2="59"/><line x1="59" y1="27" x2="65" y2="37"/><line x1="141" y1="163" x2="135" y2="173"/></g><circle cx="100" cy="100" r="62" fill="none" stroke="#5b8bb5" stroke-width="1" opacity="0.35" stroke-dasharray="4,6"/><g stroke="#8db3d4" stroke-width="1" opacity="0.45"><line x1="100" y1="38" x2="100" y2="72"/><line x1="100" y1="128" x2="100" y2="162"/><line x1="38" y1="100" x2="72" y2="100"/><line x1="128" y1="100" x2="162" y2="100"/></g><circle cx="100" cy="100" r="40" fill="rgba(91,139,181,0.1)" stroke="#5b8bb5" stroke-width="1.5" opacity="0.9"/><g stroke="#8db3d4" stroke-width="2.5" stroke-linecap="round" opacity="0.9"><line x1="100" y1="60" x2="100" y2="50"/><line x1="100" y1="140" x2="100" y2="150"/><line x1="60" y1="100" x2="50" y2="100"/><line x1="140" y1="100" x2="150" y2="100"/><line x1="128" y1="72" x2="134" y2="66"/><line x1="72" y1="128" x2="66" y2="134"/><line x1="72" y1="72" x2="66" y2="66"/><line x1="128" y1="128" x2="134" y2="134"/></g><circle cx="100" cy="100" r="22" fill="rgba(91,139,181,0.18)" stroke="#8db3d4" stroke-width="2"/><circle cx="100" cy="100" r="14" fill="rgba(141,179,212,0.2)" stroke="#8db3d4" stroke-width="1.2"/><circle cx="100" cy="100" r="6" fill="#8db3d4"/><circle cx="100" cy="100" r="3" fill="#fff" opacity="0.95"/></svg>
     <h1>HELIOS</h1>
-    <div class="sub">TACTICAL OVERLAY v1.0</div>
+    <div class="sub" id="login-version">TACTICAL OVERLAY</div>
     <div class="auth-divider"></div>
 
     <div id="login-form">
@@ -895,7 +895,10 @@ html.popout-mode #content{padding:10px 12px}
               <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">SOFTWARE</div>
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                 <div><div class="setting-label">Version</div><div class="setting-sub" id="settings-app-version">—</div></div>
-                <button class="btn" onclick="checkForUpdatesManual()" style="font-size:9px;padding:6px 10px">CHECK FOR UPDATES</button>
+                <div style="display:flex;gap:6px">
+                  <button class="btn" onclick="showWhatsNew()" style="font-size:9px;padding:6px 10px">WHAT'S NEW</button>
+                  <button class="btn" onclick="checkForUpdatesManual()" style="font-size:9px;padding:6px 10px">CHECK FOR UPDATES</button>
+                </div>
               </div>
               <div id="settings-update-status" style="font-size:11px;color:var(--accent)">Auto-updates on — Helios checks for new versions automatically.</div>
             </div>
@@ -1371,6 +1374,36 @@ const ZONE_SPEECH = {l_arm:'left arm',r_arm:'right arm',l_leg:'left leg',r_leg:'
 const ICON_POS = {head:{x:86,y:8},torso:{x:86,y:88},l_arm:{x:30,y:161},r_arm:{x:140,y:161},l_leg:{x:72,y:260},r_leg:{x:106,y:260}}
 const DEFAULT_BREVITY = [] // blank slate — admins add their own
 
+// ── CHANGELOG ─────────────────────────────────────────────────────────────
+// Shown as a "What's New" modal after an update, and on demand from
+// Settings. Kept short (recent versions only) — full history lives in
+// CHANGELOG.md in the repo.
+const CHANGELOG = [
+  { v:'1.4.2', items:[
+    'Fixed the PTT transmit glow disappearing after ~1s even while still holding the key.',
+    'Fixed the "HOLD X TO TRANSMIT" hint not updating after rebinding your PTT key.',
+  ]},
+  { v:'1.4.1', items:[
+    'Rebuilt radio/comms (join/leave, PTT, ear routing, mic device+test) into its own module.',
+  ]},
+  { v:'1.4.0', items:[
+    'Medical supplies are now persistent per Operation — using a bandage/TQ uses it up, revive no longer refills. Only starting an Operation resets loadout.',
+    'Death screen shows the real cause (headshot / bled out / cardiac arrest).',
+    'Comms tab marked WIP while voice quality gets fully verified.',
+    'Medical pop-out is now a real standalone window, not an always-on-top overlay.',
+    'Reordered the top navigation tabs.',
+  ]},
+  { v:'1.3.9', items:[
+    'Stim overdose is now a gradual ~30s heart-rate ramp to cardiac arrest instead of an instant chance roll. Stacking speeds it up; depressant still clears it if used in time.',
+  ]},
+  { v:'1.3.8', items:[
+    'SPLINT always shows as an option now (greyed out with no fracture) instead of disappearing.',
+  ]},
+  { v:'1.3.6', items:[
+    'Found and fixed the real bug behind bandages/tourniquets not sticking — a Firestore write bug that was silently dropping every treatment.',
+  ]},
+]
+
 // ── GLOBAL STATE ──────────────────────────────────────────────────────────
 const S = {
   // Auth
@@ -1795,6 +1828,10 @@ async function enterCard(cardId) {
   }
 
   $('app').style.display = 'flex'
+  // "What's New" only fires here, never over the login/card-select screens
+  // — those are .fullscreen (z-index:900), well above a modal's z-index:50,
+  // so a modal opened while they're showing would render invisibly behind them.
+  if (APP_VERSION) maybeShowWhatsNewOnUpdate(APP_VERSION)
 
   // Update member online status
   await setDoc(doc(db,'cards',cardId,'members',S.user.uid),{online:true},{merge:true})
@@ -3852,7 +3889,12 @@ window.helios?.onUpdateStatus?.(status => {
   renderUpdateBanner(status)
   renderUpdateSettingsStatus(status)
 })
-window.helios?.getAppVersion?.().then(v => { const el=$('settings-app-version'); if(el) el.textContent = 'v'+v }).catch(()=>{})
+let APP_VERSION = null
+window.helios?.getAppVersion?.().then(v => {
+  APP_VERSION = v
+  const el=$('settings-app-version'); if(el) el.textContent = 'v'+v
+  const lv=$('login-version'); if(lv) lv.textContent = 'TACTICAL OVERLAY v'+v
+}).catch(()=>{})
 window.showInviteCode = () => {
   $('modal-invite-code').textContent = S.card?.inviteCode||'—'
   $('invite-modal').style.display='flex'
@@ -4652,6 +4694,60 @@ function openInlineModal(id, html) {
 
 function closeInlineModal(id) {
   document.getElementById(id)?.remove()
+}
+
+// Modal HTML built by openInlineModal embeds onclick="closeInlineModal(...)"
+// / "sfx(...)" as inline HTML attributes, which execute in global (window)
+// scope — not module scope. Plain top-level function declarations in a
+// <script type="module"> are NOT added to window, so every modal's inline
+// close/cancel button was throwing a silent ReferenceError and never
+// closing (the backdrop-click listener still worked since that's wired in
+// JS, not an inline attribute — that's why this went unnoticed). Exposing
+// these explicitly fixes every existing modal, not just new ones.
+window.sfx = sfx
+window.openInlineModal = openInlineModal
+window.closeInlineModal = closeInlineModal
+window.confirmInlineModal = confirmInlineModal
+
+// ── WHAT'S NEW ────────────────────────────────────────────────────────────
+// entries: subset of CHANGELOG to show (all of it for the on-demand button,
+// or just the versions newer than the last one this install has seen for
+// the auto-popup after an update).
+function renderWhatsNewModal(entries) {
+  const body = entries.map(e => `
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.1em;margin-bottom:5px">v${e.v}</div>
+      <ul style="margin:0;padding-left:16px;font-size:11.5px;color:#a8b8cc;line-height:1.6">
+        ${e.items.map(i=>`<li>${i}</li>`).join('')}
+      </ul>
+    </div>`).join('')
+  openInlineModal('whats-new-modal', `
+    <div class="modal-box" style="max-width:440px;max-height:80vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div class="orb" style="font-size:13px;font-weight:700">WHAT'S NEW</div>
+      </div>
+      <div class="modal-body" style="overflow-y:auto">
+        ${body}
+        <button class="btn btn-blue" onclick="closeInlineModal('whats-new-modal');sfx('click')" style="width:100%;padding:9px;font-size:10px;margin-top:4px">GOT IT</button>
+      </div>
+    </div>
+  `)
+}
+
+window.showWhatsNew = () => { sfx('click'); renderWhatsNewModal(CHANGELOG) }
+
+// Auto-popup once per version bump. Compares against the last version this
+// install showed the user (localStorage, per-machine — not tied to any
+// account) so a fresh auto-update shows only what's new since last time,
+// and a brand-new install doesn't get dumped with the whole history.
+function maybeShowWhatsNewOnUpdate(currentVersion) {
+  const KEY = 'heliosLastSeenVersion'
+  const last = localStorage.getItem(KEY)
+  localStorage.setItem(KEY, currentVersion)
+  if (!last || last === currentVersion) return // first-ever launch, or unchanged
+  const idx = CHANGELOG.findIndex(e => e.v === last)
+  const newEntries = idx === -1 ? CHANGELOG : CHANGELOG.slice(0, idx)
+  if (newEntries.length) renderWhatsNewModal(newEntries)
 }
 
 // Generic confirm dialog — replaces all confirm() calls
