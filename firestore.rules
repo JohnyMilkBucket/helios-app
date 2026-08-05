@@ -44,10 +44,23 @@ service cloud.firestore {
 
     // The single privileged owner/operator identity — same account used to
     // log into the main app and the separate admin key-generator app.
-    // Case-insensitive since usernames are stored with their original casing.
+    // Pinned to the actual account UID, NOT a username field. users/{uid} is
+    // self-writable (see below), so checking a username value would let any
+    // authenticated user grant themselves owner-admin just by renaming
+    // themselves to "Sidious" from devtools.
     function isOwnerAdmin() {
-      return isAuthed() &&
-        get(/databases/$(database)/documents/users/$(userId())).data.username.lower() == 'sidious';
+      return isAuthed() && userId() == 'J4lApBTvLba6hU5ZXqb0PqIyWqp1';
+    }
+
+    // True if `expiresAt` is a plausible expiry for a license key with the
+    // given duration, activated right around now. Ties the client-supplied
+    // timestamp to the server's own clock (request.time) and the key's real
+    // durationDays, so it can't be set to an arbitrary huge value — the only
+    // room to maneuver is the +/-5min tolerance for clock skew and the time
+    // the transaction takes to commit.
+    function isPlausibleExpiry(expiresAt, durationDays) {
+      let expected = request.time.toMillis() + durationDays * 24 * 60 * 60 * 1000;
+      return expiresAt >= expected - 300000 && expiresAt <= expected + 300000;
     }
 
     // -- Users --
@@ -100,14 +113,39 @@ service cloud.firestore {
       // Sidious can always create a card. Everyone else must reference a
       // real, not-yet-activated license key in the same write — the app
       // activates that key in the same transaction that creates this doc.
+      // licenseExpiresAt must also be a plausible expiry actually derived
+      // from that key's real durationDays (see isPlausibleExpiry) — without
+      // this check the field is just a client-supplied number and anyone
+      // could hand themselves a card that "expires" in the year 3000.
       allow create: if isOwnerAdmin() ||
         ( isAuthed() &&
+          request.resource.data.ownerId == userId() &&
           exists(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)) &&
-          get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.activated == false
+          get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.activated == false &&
+          isPlausibleExpiry(
+            request.resource.data.licenseExpiresAt,
+            get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.durationDays
+          )
         );
-      // Renewing an existing card's license also goes through here, and is
-      // already correctly restricted to that card's Owner/Admins.
-      allow update: if isCardAdmin(cardId);
+      // Renewing an existing card's license also goes through here. Any
+      // card admin can update non-license fields freely (rename, invite
+      // code, etc). But if licenseKeyCode or licenseExpiresAt are part of
+      // the change, it must be a genuine renewal: a real, not-yet-activated
+      // key whose durationDays actually justifies the new expiry — closes
+      // the hole where an admin could just set their own card's
+      // licenseExpiresAt to anything via a direct updateDoc call.
+      allow update: if isCardAdmin(cardId) &&
+        ( ( request.resource.data.licenseExpiresAt == resource.data.licenseExpiresAt &&
+            request.resource.data.licenseKeyCode == resource.data.licenseKeyCode )
+          ||
+          ( exists(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)) &&
+            get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.activated == false &&
+            isPlausibleExpiry(
+              request.resource.data.licenseExpiresAt,
+              get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.durationDays
+            )
+          )
+        );
       allow delete: if isAuthed() &&
         get(/databases/$(database)/documents/cards/$(cardId)).data.ownerId == userId();
 
@@ -117,8 +155,38 @@ service cloud.firestore {
         // prospective member doc (needed for the "am I already a member?"
         // check that runs before joinCard creates that doc).
         allow read:   if isCardMember(cardId) || memberId == userId();
-        allow create: if isAuthed() && memberId == userId(); // join yourself
-        allow update: if isCardAdmin(cardId) || memberId == userId(); // admin or self
+
+        // Self-join. Only the very first member of a not-yet-existing card
+        // (the card-creation transaction in doCreateCard) may create
+        // themselves with owner/admin privileges. Every join to an ALREADY
+        // existing card must come in with none — the app already sends
+        // role:'OPERATOR'/isAdmin:false for that path, but the rule enforces
+        // it too, so a devtools-crafted join can't just hand itself admin.
+        allow create: if isAuthed() && memberId == userId() &&
+          ( !exists(/databases/$(database)/documents/cards/$(cardId)) ||
+            ( request.resource.data.isAdmin == false &&
+              request.resource.data.role != 'OWNER' &&
+              request.resource.data.canTreatOthers == false &&
+              request.resource.data.canCreateOps == false &&
+              request.resource.data.canEditBrevity == false &&
+              request.resource.data.canMultiChan == false
+            )
+          );
+
+        // Admins can change anything about any member (promote, demote,
+        // edit loadout, kick). A member editing their OWN doc (presence,
+        // inventory, profile fields) may never change their own privilege
+        // fields — otherwise any joined member could self-promote to admin
+        // with a direct updateDoc from devtools.
+        allow update: if isCardAdmin(cardId) ||
+          ( memberId == userId() &&
+            request.resource.data.isAdmin == resource.data.isAdmin &&
+            request.resource.data.role == resource.data.role &&
+            request.resource.data.canTreatOthers == resource.data.canTreatOthers &&
+            request.resource.data.canCreateOps == resource.data.canCreateOps &&
+            request.resource.data.canEditBrevity == resource.data.canEditBrevity &&
+            request.resource.data.canMultiChan == resource.data.canMultiChan
+          );
         allow delete: if isCardAdmin(cardId) || memberId == userId(); // admin or self-leave
       }
 
