@@ -1036,7 +1036,6 @@ html.popout-mode #content{padding:10px 12px}
             <div class="panel" style="padding:15px">
               <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;gap:4px">
                 <div style="font-size:9px;letter-spacing:.3em;color:var(--accent)">MEMBER MANAGEMENT</div>
-                <div style="font-size:9px;color:var(--hi)">Assign roles from ORBAT →</div>
               </div>
               <div id="admin-members-list" style="display:flex;flex-direction:column;gap:6px"></div>
             </div>
@@ -1888,7 +1887,7 @@ function subscribeAll(cardId) {
   S.listeners.push(onSnapshot(collection(db,'cards',cardId,'roles'), snap => {
     S.cardRoles = snap.docs.map(d=>({id:d.id,...d.data()}))
     renderRoles()
-    renderAdminMembers() // Admin's role dropdown is sourced from this same list
+    renderAdminMembers() // role badges shown there are sourced from this same list
   }))
 
   // Units
