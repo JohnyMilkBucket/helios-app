@@ -1032,14 +1032,6 @@ html.popout-mode #content{padding:10px 12px}
 
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
 
-            <!-- MEMBER MANAGEMENT -->
-            <div class="panel" style="padding:15px">
-              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;gap:4px">
-                <div style="font-size:9px;letter-spacing:.3em;color:var(--accent)">MEMBER MANAGEMENT</div>
-              </div>
-              <div id="admin-members-list" style="display:flex;flex-direction:column;gap:6px"></div>
-            </div>
-
             <!-- CARD SETTINGS -->
             <div class="panel" style="padding:15px">
               <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">CARD SETTINGS</div>
@@ -1074,6 +1066,16 @@ html.popout-mode #content{padding:10px 12px}
                 <button class="btn btn-red" onclick="clearAllPatients()" style="font-size:9px;padding:6px 10px">CLEAR ALL PATIENTS</button>
               </div>
               <div style="font-size:9px;color:var(--accent)">Wipes every casualty record on this card — use at the end of an op to reset for the next one. Each player's own MY STATUS clears automatically.</div>
+            </div>
+
+            <!-- MEMBER MANAGEMENT — last, since its list can grow tall with a
+                 large roster and would otherwise unbalance the shorter panels
+                 above it in the auto-fit grid. -->
+            <div class="panel" style="padding:15px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;gap:4px">
+                <div style="font-size:9px;letter-spacing:.3em;color:var(--accent)">MEMBER MANAGEMENT</div>
+              </div>
+              <div id="admin-members-list" style="display:flex;flex-direction:column;gap:6px"></div>
             </div>
 
           </div>
