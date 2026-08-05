@@ -2,18 +2,46 @@
 
 ## Why this file exists
 
-Most of this session went into hunting a bug where treatment state
+A previous session went into hunting a bug where treatment state
 (bandaging, tourniquets) mutated correctly locally but silently reverted
-between actions. The root cause: two different pieces of code were both
-writing to the same shared state (`S.self.zones`) with no coordination — a
-local mutation from a treatment, and a Firestore listener that also
-overwrote the same field on every snapshot. Whichever one ran last won, with
-zero error. The same exact bug pattern was then found independently in
-ORBAT's sub-unit assignment.
+between actions. The working theory at the time was that two different
+pieces of code were both writing to the same shared state (`S.self.zones`)
+with no coordination — a local mutation from a treatment, and a Firestore
+listener that also overwrote the same field on every snapshot — and that
+this rewrite (splitting medical into its own module with a single writer)
+would fix it. It shipped, and the user reported the entire medical system
+broken. It was reverted back to the pre-rewrite inline code.
 
-This isn't a one-off — it's what happens by default in a single 5000+ line
-file where every feature reads and writes one big shared `S` object. This
-doc is the convention that's meant to stop that from happening again.
+**The dual-writer theory was wrong, or at least incomplete.** The actual
+root cause, found later by writing raw, isolated Firestore calls straight
+against the live project (bypassing the app entirely) and reading server
+truth back with a fresh `getDoc()`: `setDoc(ref, {'zones.torso': value},
+{merge:true})` — a FLAT dotted string key — does not get parsed as a nested
+field path by `setDoc()`. It creates a literal top-level field named
+`zones.torso` (dots included, as one field name) and never touches the real
+nested `zones.torso` field at all. `updateDoc()` is the only call that
+treats a dotted string key as a path. Every treatment write, in both the
+original inline code AND the reverted module, used the flat-dotted-key form
+with `setDoc`+merge — so every bandage/tourniquet/stim application was
+silently writing to a junk field the whole time, in both versions, which is
+exactly why the rewrite "broke everything": it had the exact same
+pre-existing bug the inline code did, just newly exposed because the
+rewrite briefly looked like the culprit.
+
+This means the dual-writer pattern described below **was never actually
+observed to cause a bug in this app** — it's a real, general risk (see
+below), and the single-writer discipline is still worth having for
+maintainability and isolation, but it is not what broke medical. The fix
+that actually mattered was switching every dot-path write from
+`setDoc(ref, {...}, {merge:true})` to `updateDoc(ref, {...})`. `medical.js`
+was rebuilt a second time with that fix applied, verified live against the
+real Firebase project (mark down → bandage → tourniquet → reload → confirm
+via fresh `getDoc()`, not just local state) before shipping.
+
+Separately: this codebase is a single 5000+ line file where every feature
+reads and writes one big shared `S` object, which is real maintainability
+risk on its own regardless of whether it caused this specific bug. This doc
+is the convention meant to keep that from becoming load-bearing.
 
 ## The rule: single writer per piece of state
 
