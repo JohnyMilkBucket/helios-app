@@ -1385,6 +1385,10 @@ const S = {
   // Listeners (for cleanup)
   listeners: [],
 }
+// Exposed for live debugging — press F12, then e.g. `S.self.zones` to see
+// real current state, `updateBodyFigure()` to force a redraw, etc.
+window.S = S
+window.updateBodyFigure = updateBodyFigure
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
 function cs2email(cs) { return cs.toLowerCase().replace(/[^a-z0-9._-]/g,'')+EMAIL_DOMAIN }
