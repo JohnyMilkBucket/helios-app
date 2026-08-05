@@ -186,7 +186,7 @@ const ZONES = Medical.ZONES
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
 const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST'}
 
-const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], self:Medical.getSelf(), patients:[], listeners:[] }
+const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], events:[], self:Medical.getSelf(), patients:[], listeners:[] }
 
 // ── ALERTS (sound + notification) ────────────────────────────────────────
 // Fires while this page is open (foreground or backgrounded tab) — this is
@@ -300,6 +300,7 @@ async function enterCard(cardId) {
   S.card = { id:cardId, ...cardSnap.data() }
   $('app-cardname').textContent = S.card.name||'HELIOS CARD'
 
+  Medical.setActorName(S.profile.username||'UNKNOWN OPERATIVE')
   Medical.initMedical(db, cardId, S.user.uid, {
     onSelfChange: () => renderMedicalView(),
     onPatientsChange: (patients, info) => {
@@ -330,6 +331,14 @@ async function enterCard(cardId) {
     query(collection(db,'cards',cardId,'operations'), orderBy('createdAt','desc'), limit(6)),
     snap => {
       S.ops = snap.docs.map(d=>({id:d.id,...d.data()}))
+      Medical.setActiveOp(S.ops.find(o=>o.status==='active')?.id||null)
+      renderDashboard()
+    }
+  ))
+  S.listeners.push(onSnapshot(
+    query(collection(db,'cards',cardId,'events'), orderBy('ts','desc'), limit(100)),
+    snap => {
+      S.events = snap.docs.map(d=>({id:d.id,...d.data()}))
       renderDashboard()
     }
   ))
@@ -378,7 +387,7 @@ function renderDashboard() {
       ${pastOps.map(op=>`
         <div class="roster-row">
           <span>${op.name}</span>
-          <span style="color:var(--accent)">${op.rosterCount||0} rostered · ${op.createdAt?.toDate?.().toLocaleDateString()||''}</span>
+          <span style="color:var(--accent)">${op.rosterCount||0} rostered · ${S.events.filter(e=>e.type==='casualty'&&e.opId===op.id).length} casualties</span>
         </div>`).join('')}
     </div>` : ''}
     <div class="panel">

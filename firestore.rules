@@ -225,6 +225,17 @@ service cloud.firestore {
         allow read:   if isCardMember(cardId);
         allow write:  if isCardAdmin(cardId);
       }
+
+      // -- Events (activity/audit log) --
+      // Append-only: any member can log an event about their OWN action
+      // (going down, being revived, treating someone, starting/archiving an
+      // op) but can never attribute an event to someone else, and nothing
+      // is ever editable or deletable once written — it's a log, not state.
+      match /events/{eventId} {
+        allow read:   if isCardMember(cardId);
+        allow create: if isCardMember(cardId) && request.resource.data.actorUid == userId();
+        allow update, delete: if false;
+      }
     }
 
     // -- Medical records --

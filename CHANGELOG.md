@@ -3,6 +3,12 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.7
+- Added an activity log to the Admin panel — who treated whom, who went
+  down/revived, who started/archived operations, with timestamps.
+- Operations now show a live casualty count (desktop op cards and mobile
+  Past Operations), tallied from the new activity log.
+
 ## v1.4.6
 - Mobile companion is now installable as a real app (add to home screen,
   works on Android and iOS).

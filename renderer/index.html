@@ -1113,6 +1113,12 @@ html.popout-mode #content{padding:10px 12px}
               <div id="admin-members-list" style="display:flex;flex-direction:column;gap:6px"></div>
             </div>
 
+            <!-- ACTIVITY LOG -->
+            <div class="panel" style="padding:15px">
+              <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">ACTIVITY LOG</div>
+              <div id="admin-event-log" style="display:flex;flex-direction:column;gap:5px;max-height:320px;overflow-y:auto" class="scroll"></div>
+            </div>
+
           </div>
         </div>
 
@@ -1342,7 +1348,7 @@ import { initializeApp }   from 'https://www.gstatic.com/firebasejs/10.12.0/fire
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
 import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
-  onSnapshot, query, orderBy, serverTimestamp, where, runTransaction }
+  onSnapshot, query, orderBy, limit, serverTimestamp, where, runTransaction }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 import { getDatabase, ref as dbRef, set as dbSet, push as dbPush, remove as dbRemove, onValue, onChildAdded, off }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js'
@@ -1394,6 +1400,10 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.7', items:[
+    'Added an activity log to the Admin panel — who treated whom, who went down/revived, who started/archived operations.',
+    'Operations now show a live casualty count on both desktop and mobile.',
+  ]},
   { v:'1.4.6', items:[
     'Mobile companion is now installable as a real app (add to home screen, Android + iOS).',
     'Mobile companion can alert you (sound + notification) on down/death, unconscious, tourniquet-too-long, or new casualties — opt-in via "Enable Alerts."',
@@ -1486,7 +1496,7 @@ const S = {
   // Auth
   user: null, profile: null, member: null,
   // Card
-  cardId: null, card: null, roles: [], channels: [], members: [], brevities: [], ops: [],
+  cardId: null, card: null, roles: [], channels: [], members: [], brevities: [], ops: [], events: [],
   // Medical (self) — the actual live object owned by js/medical.js. Never
   // reassigned; the module mutates it in place and this reference stays valid.
   self: Medical.getSelf(),
@@ -2024,7 +2034,18 @@ function subscribeAll(cardId) {
     query(collection(db,'cards',cardId,'operations'), orderBy('createdAt','desc')),
     snap => {
       S.ops = snap.docs.map(d=>({id:d.id,...d.data()}))
+      Medical.setActiveOp(S.ops.find(o=>o.status==='active')?.id||null)
       renderOps()
+    }
+  ))
+
+  // Events (activity/audit log) — append-only, last 100 shown in Admin.
+  S.listeners.push(onSnapshot(
+    query(collection(db,'cards',cardId,'events'), orderBy('ts','desc'), limit(100)),
+    snap => {
+      S.events = snap.docs.map(d=>({id:d.id,...d.data()}))
+      renderEventLog()
+      renderOps() // op cards show a live casualty count derived from S.events
     }
   ))
 
@@ -2045,6 +2066,7 @@ function subscribeAll(cardId) {
   // Medical — own record + all patients. Both listeners, the write actions,
   // and the background tickers live in js/medical.js now; this just wires
   // its hooks back into this file's own render functions and side effects.
+  Medical.setActorName(S.profile.username||S.member?.username||S.profile.callsign||'UNKNOWN OPERATIVE')
   Medical.initMedical(db, cardId, S.user.uid, {
     onSelfChange: () => { updateBodyFigure(); renderInventory(); updateDownBtn() },
     // A medic's treatment (e.g. a fatal stim overdose) can kill/knock you
@@ -2626,7 +2648,7 @@ function renderOps() {
             :`<div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:4px">ARCHIVED</div>`}
           <div class="orb" style="font-size:14px;font-weight:700;letter-spacing:.1em;margin-bottom:3px">${op.name}</div>
           <div style="font-size:11px;color:#a8b8cc;margin-bottom:8px;line-height:1.5">${op.objective||''}</div>
-          <div style="font-size:9px;color:var(--accent)">${op.createdAt?.toDate?.().toLocaleDateString()||''} · ${op.rosterCount||0} ROSTERED</div>
+          <div style="font-size:9px;color:var(--accent)">${op.createdAt?.toDate?.().toLocaleDateString()||''} · ${op.rosterCount||0} ROSTERED · ${S.events.filter(e=>e.type==='casualty'&&e.opId===op.id).length} CASUALTIES</div>
         </div>
         ${S.member?.isAdmin||S.member?.canCreateOps ? `
           <button class="btn" onclick="archiveOp('${op.id}')" style="font-size:9px;padding:4px 8px;flex-shrink:0;display:${op.status==='active'?'block':'none'}">ARCHIVE</button>
@@ -2648,6 +2670,17 @@ async function resetRosterSupplies(members) {
 }
 
 window.showNewOpModal = () => { $('new-op-modal').style.display='flex'; $('op-name-inp').value=''; $('op-obj-inp').value='' }
+// Events collection is append-only and self-attributed only (see
+// firestore.rules) — every entry's actorUid must be the caller, so this
+// helper always stamps the current user, never a passed-in id.
+function logCardEvent(type, extra={}) {
+  addDoc(collection(db,'cards',S.cardId,'events'), {
+    type, ts:serverTimestamp(), actorUid:S.user.uid,
+    actorName:S.profile?.username||S.member?.username||'UNKNOWN OPERATIVE',
+    ...extra,
+  }).catch(()=>{})
+}
+
 window.createOp = async () => {
   const name = $('op-name-inp')?.value.trim().toUpperCase()
   const obj  = $('op-obj-inp')?.value.trim()
@@ -2661,11 +2694,12 @@ window.createOp = async () => {
     unit:     getUnitLabel(m.uid||m.id),
   }))
   sfx('notify')
-  await addDoc(collection(db,'cards',S.cardId,'operations'),{
+  const opRef = await addDoc(collection(db,'cards',S.cardId,'operations'),{
     name, objective:obj, status:'active',
     roster, rosterCount:roster.length,
     createdBy:S.user.uid, createdAt:serverTimestamp()
   })
+  logCardEvent('op_start', { opId:opRef.id, detail:name })
   await resetRosterSupplies(rosterMembers)
   $('new-op-modal').style.display='none'
   opRoster.clear()
@@ -2685,16 +2719,19 @@ window.quickTestOp = async () => {
       unit:     getUnitLabel(m.uid||m.id),
     }))
     sfx('notify')
-    await addDoc(collection(db,'cards',S.cardId,'operations'),{
+    const opRef = await addDoc(collection(db,'cards',S.cardId,'operations'),{
       name:'TEST OP', objective:'Quick test operation — supplies reset to loadout', status:'active',
       roster, rosterCount:roster.length,
       createdBy:S.user.uid, createdAt:serverTimestamp()
     })
+    logCardEvent('op_start', { opId:opRef.id, detail:'TEST OP' })
     await resetRosterSupplies(rosterMembers)
   })
 }
 window.archiveOp = async (id) => {
+  const op = S.ops.find(o=>o.id===id)
   await updateDoc(doc(db,'cards',S.cardId,'operations',id),{ status:'archived' })
+  logCardEvent('op_archive', { opId:id, detail:op?.name||'' })
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4584,6 +4621,33 @@ async function restoreJointOp(joId) {
 // ════════════════════════════════════════════════════════════════════════════
 // ADMIN PANEL
 // ════════════════════════════════════════════════════════════════════════════
+const TREAT_LABEL = {bandage:'bandaged',tourniquet:'applied a tourniquet to',remove_tourniquet:'removed a tourniquet from',splint:'splinted',stim:'gave a stim to',depressant:'gave a depressant to',blood:'gave a blood pack to'}
+function describeEvent(e) {
+  switch(e.type) {
+    case 'casualty':  return `${e.actorName} went down (${e.cause==='headshot'?'headshot':'wounded'})`
+    case 'revive':    return `${e.actorName} was revived`
+    case 'treatment': {
+      const self = e.actorUid===e.targetUid
+      const verb = TREAT_LABEL[e.treatment]||e.treatment
+      return self ? `${e.actorName} ${verb} themselves${e.zone?' ('+ZONE_LABEL[e.zone]+')':''}`
+                  : `${e.actorName} ${verb} ${e.targetName}${e.zone?' ('+ZONE_LABEL[e.zone]+')':''}`
+    }
+    case 'op_start':   return `${e.actorName} started operation "${e.detail}"`
+    case 'op_archive': return `${e.actorName} archived operation "${e.detail}"`
+    default: return `${e.actorName} — ${e.type}`
+  }
+}
+function renderEventLog() {
+  const el = $('admin-event-log')
+  if(!el) return
+  if(!S.events.length) { el.innerHTML = '<div style="font-size:11px;color:var(--accent);text-align:center;padding:20px">NO ACTIVITY YET</div>'; return }
+  el.innerHTML = S.events.map(e => `
+    <div style="font-size:10.5px;color:#a8b8cc;display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid rgba(91,139,181,.1)">
+      <span>${describeEvent(e)}</span>
+      <span style="color:var(--accent);flex-shrink:0">${e.ts?.toDate?.().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})||''}</span>
+    </div>`).join('')
+}
+
 function renderAdminMembers() {
   const el = $('admin-members-list')
   if(!el) return

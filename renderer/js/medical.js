@@ -32,7 +32,7 @@
 // documented exception to it, not a violation of it.
 
 import {
-  doc, setDoc, updateDoc, deleteDoc, getDocs, collection, onSnapshot, serverTimestamp,
+  doc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 
 // tier: severity 1 (minor) - 3 (severe). bleedRate: %blood lost/sec while
@@ -196,10 +196,32 @@ const M = {
   patients: [],
   db:null, cardId:null, uid:null,
   listeners: [],
+  activeOpId: null, actorName: '',
 }
 
 export function getSelf() { return M.self }
 export function getPatients() { return M.patients }
+
+// The currently-active operation, if any — tagged onto every event this
+// module logs so casualties/treatments can be attributed to the op they
+// happened during. index.html/hosting keep this in sync with their own
+// operations listener; medical.js has no opinion on what "active" means.
+export function setActiveOp(opId) { M.activeOpId = opId||null }
+// Display name for the acting player — medical.js only knows uids
+// internally, so callers hand over the human-readable name once so the
+// event log doesn't have to be joined against the roster to be readable.
+export function setActorName(name) { M.actorName = name||'' }
+
+// Append-only activity log — never awaited by callers (best-effort; a
+// logging failure should never block or roll back the actual treatment
+// write it's describing).
+function logEvent(type, extra={}) {
+  if(!M.db || !M.cardId) return
+  addDoc(collection(M.db,'cards',M.cardId,'events'), {
+    type, ts: serverTimestamp(), actorUid: M.uid, actorName: M.actorName,
+    opId: M.activeOpId, ...extra,
+  }).catch(()=>{})
+}
 
 export function initMedical(db, cardId, uid, hooks) {
   M.db = db; M.cardId = cardId; M.uid = uid
@@ -275,6 +297,7 @@ export async function markDown(username) {
     down:true, uncon:startUncon, dead:headHit, deathCause:M.self.deathCause, ...(headHit?{hr:0}:{}),
     downdAt: Date.now(), updatedAt: serverTimestamp(),
   })
+  logEvent('casualty', { targetUid:M.uid, targetName:username, cause: headHit?'headshot':'wounded' })
   return { headHit, startUncon }
 }
 
@@ -282,6 +305,7 @@ export async function revive() {
   M.self.down=false; M.self.uncon=false; M.self.dead=false; M.self.deathCause=null; M.self.zones={}; M.self.bloodPct=100
   M.self.overdosing=false; M.self.odStacks=0; M.self.hr=78
   await deleteDoc(doc(M.db,'medical',M.cardId,'patients',M.uid))
+  logEvent('revive', { targetUid:M.uid, targetName:M.actorName })
 }
 
 export async function clearPatient(patientId) {
@@ -343,6 +367,7 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
     if(treatment==='stim') { upd.uncon=M.self.uncon; upd.dead=M.self.dead }
     await updateDoc(doc(M.db,'medical',M.cardId,'patients',M.uid), upd)
     if(treatment!=='remove_tourniquet') await syncInventoryWrite()
+    logEvent('treatment', { targetUid:M.uid, targetName:M.actorName, treatment, zone })
     return { isSelf:true, diedFromStim: treatment==='stim' && M.self.dead, self:M.self }
   } else if(patient) {
     const upd = { [`zones.${zone}`]: patient.zones[zone], updatedAt:serverTimestamp() }
@@ -352,6 +377,7 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
     if(treatment==='stim') { upd.uncon=patient.uncon; upd.dead=patient.dead }
     await updateDoc(doc(M.db,'medical',M.cardId,'patients',patientId), upd)
     if(treatment!=='remove_tourniquet') await syncInventoryWrite()
+    logEvent('treatment', { targetUid:patientId, targetName:patient.username||patientId, treatment, zone })
     return { isSelf:false, patient }
   }
 }
