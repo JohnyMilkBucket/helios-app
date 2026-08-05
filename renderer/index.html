@@ -3261,7 +3261,7 @@ window.openTreat = (zone, target='self') => {
     s?.tq
       ? {id:'remove_tourniquet', label:'REMOVE TQ', color:'#fbbf24', timeSec:2, desc:s?.bandaged?'Wound is packed — safe':'⚠ Resumes bleeding — 2s', noInv:true}
       : {id:'tourniquet', label:'TOURNIQUET', color:'#fbbf24', timeSec:3, desc:isLimb?'Fast stop — 3s':'❌ LIMBS ONLY', locked:!isLimb},
-    ...(s?.fracture ? [{id:'splint', label:'SPLINT', color:'#a78bfa', timeSec:6, desc:'Fix fracture — 6s'}] : []),
+    {id:'splint', label:'SPLINT', color:'#a78bfa', timeSec:6, desc:s?.fracture?'Fix fracture — 6s':'❌ NO FRACTURE', locked:!s?.fracture},
     {id:'stim',       label:'STIMULANT',  color:'#a78bfa', timeSec:3,
       desc: !patient.uncon ? `⚠ HR→200+ · ${Math.min(100,2*((patient.odStacks||0)+1))}% death risk` : 'Wake patient — 3s'},
     {id:'depressant', label:'DEPRESSANT', color:'#60a5fa', timeSec:3, desc: patient.overdosing?'Clears OD — 3s':'Lower HR — 3s'},
@@ -3337,6 +3337,7 @@ window.startApply = (zone, treatment, target) => {
   // switches to REMOVE TQ once a zone is tourniqueted) but guard it directly
   // too, in case a stale render or a race ever leaves the old button live.
   if(treatment==='tourniquet' && patient?.zones?.[zone]?.tq) { blockTreatment('Already has a tourniquet on') ; return }
+  if(treatment==='splint' && !patient?.zones?.[zone]?.fracture) { blockTreatment('No fracture on this zone — nothing to splint') ; return }
   const frag = patient?.zones?.[zone]?.frag
   let dur = APPLY_MS[treatment]||3000
   if(treatment==='bandage') dur = frag ? APPLY_MS.bandage_frag : APPLY_MS.bandage_bleed
