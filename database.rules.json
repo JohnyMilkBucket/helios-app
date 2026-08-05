@@ -1,0 +1,24 @@
+{
+  "rules": {
+    "rtc": {
+      "$cardId": {
+        "$chanId": {
+          "peers": {
+            ".read": "auth != null",
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid"
+            }
+          },
+          "signals": {
+            "$uid": {
+              ".read": "auth != null && auth.uid === $uid",
+              ".write": "auth != null"
+            }
+          }
+        }
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}

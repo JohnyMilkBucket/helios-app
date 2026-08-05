@@ -220,6 +220,11 @@ html.popout-mode #content{padding:10px 12px}
   color:#fff;font-size:11px;cursor:pointer;-webkit-app-region:no-drag;min-width:60px;text-align:center;
 }
 .keybind-btn.listening{border-color:var(--amber);color:var(--amber);animation:bpulse 1s ease-in-out infinite}
+.keybind-unbind-btn{
+  padding:4px 7px;border:1px solid var(--border);background:rgba(8,18,36,.7);
+  color:var(--redsoft,#f87171);font-size:11px;cursor:pointer;-webkit-app-region:no-drag;line-height:1;
+}
+.keybind-unbind-btn:hover{border-color:var(--red);color:var(--red)}
 /* ═══════════════════════════════════════════════
    LOGIN / CARD SCREENS
    ═══════════════════════════════════════════════ */
@@ -615,6 +620,7 @@ html.popout-mode #content{padding:10px 12px}
                   <div style="border-top:1px solid rgba(91,139,181,.18);margin-top:12px;padding-top:8px">
                     <div style="font-size:9px;letter-spacing:.2em;color:var(--accent);margin-bottom:2px">OVERVIEW</div>
                     <div id="overview"></div>
+                    <div id="capability-summary" style="display:none;margin-top:10px;padding:8px 10px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.06)"></div>
                   </div>
                 </div>
                 <div id="consciousness-status" style="text-align:center;margin-top:10px;font-size:11px;font-weight:700;letter-spacing:.15em;color:var(--green)">● CONSCIOUS</div>
@@ -762,11 +768,17 @@ html.popout-mode #content{padding:10px 12px}
                   <div style="display:flex;gap:8px">
                     <div style="flex:1;display:flex;justify-content:space-between;align-items:center">
                       <span class="setting-sub">Keybind</span>
-                      <button id="ear-left-key-btn" class="keybind-btn" onclick="listenEarKey('left')">UNSET</button>
+                      <div style="display:flex;gap:4px">
+                        <button id="ear-left-key-btn" class="keybind-btn" onclick="listenEarKey('left')">UNSET</button>
+                        <button class="keybind-unbind-btn" onclick="unbindEarKey('left')" title="Unbind">✕</button>
+                      </div>
                     </div>
                     <div style="flex:1;display:flex;justify-content:space-between;align-items:center">
                       <span class="setting-sub">Keybind</span>
-                      <button id="ear-right-key-btn" class="keybind-btn" onclick="listenEarKey('right')">UNSET</button>
+                      <div style="display:flex;gap:4px">
+                        <button id="ear-right-key-btn" class="keybind-btn" onclick="listenEarKey('right')">UNSET</button>
+                        <button class="keybind-unbind-btn" onclick="unbindEarKey('right')" title="Unbind">✕</button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -775,11 +787,17 @@ html.popout-mode #content{padding:10px 12px}
                   <div style="display:flex;gap:8px">
                     <div style="flex:1;display:flex;justify-content:space-between;align-items:center">
                       <span class="setting-sub">◀ Left radio</span>
-                      <button id="radio-ptt-left-btn" class="keybind-btn" onclick="listenRadioPTTKey('left')">[</button>
+                      <div style="display:flex;gap:4px">
+                        <button id="radio-ptt-left-btn" class="keybind-btn" onclick="listenRadioPTTKey('left')">[</button>
+                        <button class="keybind-unbind-btn" onclick="unbindRadioPTTKey('left')" title="Unbind">✕</button>
+                      </div>
                     </div>
                     <div style="flex:1;display:flex;justify-content:space-between;align-items:center">
                       <span class="setting-sub">Right radio ▶</span>
-                      <button id="radio-ptt-right-btn" class="keybind-btn" onclick="listenRadioPTTKey('right')">]</button>
+                      <div style="display:flex;gap:4px">
+                        <button id="radio-ptt-right-btn" class="keybind-btn" onclick="listenRadioPTTKey('right')">]</button>
+                        <button class="keybind-unbind-btn" onclick="unbindRadioPTTKey('right')" title="Unbind">✕</button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1174,27 +1192,34 @@ html.popout-mode #content{padding:10px 12px}
       <div style="margin-bottom:14px;padding:10px 12px;border:1px solid rgba(91,139,181,.25);background:rgba(91,139,181,.07)">
         <div class="orb" style="font-size:10px;color:var(--hi);margin-bottom:6px;letter-spacing:.1em">INJURIES</div>
         <div style="font-size:11px;color:#cdd9e8;line-height:1.7">
-          <b style="color:var(--red)">BLEED</b> — Bleeding wound. Apply bandage (5s) or tourniquet (3s, limbs only).<br>
-          <b style="color:var(--orange)">FRAG</b> — Fragmentation wound. Bandage takes 15s to pack. Tourniquet still 3s on limbs.
+          Not every hit is equally bad — wounds range from a light graze to a severe hit, and only the worst ones knock you out on impact. Lesser wounds leave you down but still conscious and able to fight/call for help; you only pass out later if blood loss actually drags you under 25%.<br><br>
+          <b style="color:var(--red)">Low Velocity</b> — light bleed, ~1% blood every 1.5s.<br>
+          <b style="color:var(--red)">Medium Velocity</b> — moderate bleed, ~1% blood every 1s.<br>
+          <b style="color:var(--red)">High Velocity</b> — severe bleed, ~1% blood every 0.5s. Severe enough to drop you unconscious immediately.<br>
+          <b style="color:var(--orange)">Fragmentation</b> — can accompany any bleed. Doesn't change the bleed itself, just takes longer to bandage (15s instead of 5s).<br>
+          <b style="color:#a78bfa">Fracture</b> — can also accompany a wound. Splint it to fix.<br><br>
+          <b style="color:#9ca3af">A hit to the head is always fatal.</b> Multiple zones can be hit at once.
         </div>
       </div>
       <div style="margin-bottom:14px;padding:10px 12px;border:1px solid rgba(91,139,181,.25);background:rgba(91,139,181,.07)">
         <div class="orb" style="font-size:10px;color:var(--hi);margin-bottom:6px;letter-spacing:.1em">TREATMENTS</div>
         <div style="font-size:11px;color:#cdd9e8;line-height:1.9">
-          🩹 <b style="color:var(--green)">Bandage</b> — Stops bleeding. 5s on BLEED, 15s on FRAG.<br>
-          🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only (not head). 3s. Faster but causes pain over time.<br>
-          ⚡ <b style="color:var(--purple)">Stimulant (Epi)</b> — Wakes unconscious patients. 3s. <b style="color:var(--red)">FATAL if given to conscious patient.</b><br>
-          💧 <b style="color:var(--blue)">Depressant (Adeno)</b> — Lowers elevated heart rate. 3s. Use to counter stim OD.<br>
+          🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before the bleeding actually stops — keep bandaging until it does. 5s per try, 15s if fragmentation is present.<br>
+          🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only, never head/torso. Stops bleeding instantly (3s to apply) but cuts circulation: that limb is unusable the whole time it's on (see INCAPACITATION below), and left on past ~4 minutes risks losing the limb entirely past 6.<br>
+          🦴 <b style="color:#a78bfa">Splint</b> — Fixes a fracture. 6s.<br>
+          ⚡ <b style="color:var(--purple)">Stimulant</b> — Safe wake-up on an unconscious patient. On a conscious patient it's an overdose: heart rate spikes to 200-250 and each dose taken while already spiked adds +2% risk of cardiac death (stacking). 3s.<br>
+          💧 <b style="color:var(--blue)">Depressant</b> — Normally just lowers heart rate. If the patient is currently overdosing on stims, it clears the overdose outright instead. 3s.<br>
           🩸 <b style="color:var(--red)">Blood Bag</b> — Restores 40% blood volume. 10s. Medic item.
         </div>
       </div>
       <div style="padding:10px 12px;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.06)">
-        <div class="orb" style="font-size:10px;color:var(--red);margin-bottom:6px;letter-spacing:.1em">STIM PROTOCOL</div>
+        <div class="orb" style="font-size:10px;color:var(--red);margin-bottom:6px;letter-spacing:.1em">INCAPACITATION — WHAT YOU CAN'T DO</div>
         <div style="font-size:11px;color:var(--redsoft);line-height:1.7">
-          • Only use stimulants on <b>unconscious</b> patients<br>
-          • Conscious + stim = immediate cardiac arrest<br>
-          • 2+ stims on unconscious = elevated cardiac burst chance<br>
-          • Counter OD with Adenosine (depressant) to lower HR
+          • Unconscious or deceased — can't act, can't speak on radio<br>
+          • One arm broken or tourniqueted — rifle unusable, pistol only<br>
+          • Both arms broken or tourniqueted — no weapon usable at all<br>
+          • Either leg broken or tourniqueted — can't walk<br>
+          Your MY STATUS panel (and a medic's view of you) shows a live "CANNOT" summary whenever any of these apply.
         </div>
       </div>
     </div>
@@ -1299,12 +1324,22 @@ const rtdb = getDatabase(firebaseApp)
 // ── CONSTANTS ─────────────────────────────────────────────────────────────
 const EMAIL_DOMAIN = '@helios.internal'
 const MAX_RADIO = 2
+// tier: severity 1 (minor) - 3 (severe). bleedRate: %blood lost/sec while
+// actively bleeding (unTQ'd) — higher tier bleeds faster: tier 1 loses 1%
+// every 1.5s, tier 2 loses 1% every 1s, tier 3 loses 1% every 0.5s. Bandages
+// needed to fully pack a wound scale with tier (see BANDAGES_NEEDED) — never
+// surfaced to the player directly, they just have to keep bandaging until it
+// stops.
 const INJ = {
-  BLEED_LOW:  { name:'Low Velocity Wound',    color:'#f87171' },
-  BLEED:      { name:'Medium Velocity Wound', color:'#dc2626' },
-  BLEED_HIGH: { name:'High Velocity Wound',   color:'#991b1b' },
-  FRAG:       { name:'Fragmentation Wound',   color:'#f97316' },
+  BLEED_LOW:  { name:'Low Velocity Wound',    color:'#f87171', tier:1, bleedRate:1/1.5 },
+  BLEED:      { name:'Medium Velocity Wound', color:'#dc2626', tier:2, bleedRate:1 },
+  BLEED_HIGH: { name:'High Velocity Wound',   color:'#991b1b', tier:3, bleedRate:2 },
 }
+const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
+// Fragmentation is a separate flag layered on top of a bleed (like fracture),
+// not its own bleed type — a wound can be e.g. a Medium Velocity Wound WITH
+// frag, which just means a longer pack time (see APPLY_MS.bandage_frag).
+const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 const APPLY_MS = {
   bandage_bleed:5000, bandage_frag:15000,
   tourniquet:3000, stim:3000, depressant:3000, blood:10000, remove_tourniquet:2000,
@@ -1327,7 +1362,7 @@ const S = {
   // Card
   cardId: null, card: null, roles: [], channels: [], members: [], brevities: [], ops: [],
   // Medical (self)
-  self: { down:false, uncon:false, dead:false, zones:{}, bloodPct:100, hr:78, stimsThisDown:0, inv:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0} },
+  self: { down:false, uncon:false, dead:false, zones:{}, bloodPct:100, hr:78, overdosing:false, odStacks:0, inv:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0} },
   // Medical (all patients - for medic view)
   patients: [],
   units: [],
@@ -1870,7 +1905,8 @@ function subscribeAll(cardId) {
       S.self.down          = d.down     ?? false
       S.self.uncon         = d.uncon    ?? false
       S.self.dead          = d.dead     ?? false
-      S.self.stimsThisDown = d.stimsThisDown ?? 0
+      S.self.overdosing    = d.overdosing ?? false
+      S.self.odStacks      = d.odStacks ?? 0
       S.self.inv      = d.inv      || S.self.inv
       // A medic's treatment (e.g. a fatal stim overdose) can kill/knock you
       // out remotely — cut an already-held PTT immediately, don't wait for
@@ -1881,7 +1917,7 @@ function subscribeAll(cardId) {
       updateDownBtn()
     } else {
       S.self.down = false; S.self.uncon = false; S.self.dead = false; S.self.zones = {}; S.self.bloodPct = 100
-      S.self.stimsThisDown = 0
+      S.self.overdosing = false; S.self.odStacks = 0
       S.self.inv = { ...(S.member?.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}) }
       updateBodyFigure()
       renderInventory()
@@ -2973,7 +3009,7 @@ window.toggleDown = async () => {
   if(S.self.down) {
     // Revive
     S.self.down=false; S.self.uncon=false; S.self.dead=false; S.self.zones={}; S.self.bloodPct=100
-    S.self.stimsThisDown=0; S.self.hr=78
+    S.self.overdosing=false; S.self.odStacks=0; S.self.hr=78
     S.self.inv = {...(S.member.ld||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})}
     await deleteDoc(doc(db,'medical',S.cardId,'patients',S.user.uid))
     await syncToJointCasualties({down:false})
@@ -2981,26 +3017,46 @@ window.toggleDown = async () => {
     updateDownBtn()
     updateBodyFigure(); renderInventory()
   } else {
-    // Mark down with random injuries
+    // Mark down with random injuries. Each hit zone rolls an overall wound
+    // tier — 60% tier 1, 30% tier 2, 10% tier 3 — which composes its own
+    // bleed severity / fragmentation / fracture odds:
+    //   Tier 1: tier 1-2 bleed, 20% chance of frag, never fractures
+    //   Tier 2: tier 2 bleed (low chance of tier 3), always frag, 30% fracture
+    //   Tier 3: tier 3 bleed, always frag, always fracture
+    // A head hit skips all of this — it's always instantly fatal.
     const shuffled=[...ZONES].sort(()=>Math.random()-.5)
     const count=1+Math.floor(Math.random()*4)
     S.self.zones={}
-    shuffled.slice(0,count).forEach(z=>{
-      const r = Math.random()
-      const injType = r<.15 ? 'BLEED_HIGH' : r<.55 ? 'BLEED' : r<.8 ? 'BLEED_LOW' : 'FRAG'
+    const hitZones = shuffled.slice(0,count)
+    const headHit = hitZones.includes('head')
+    hitZones.forEach(z=>{
+      const wr = Math.random()
+      const wtier = wr<.6 ? 1 : wr<.9 ? 2 : 3
+      let bleedTier, frag, fracture
+      if(wtier===1)      { bleedTier = Math.random()<.5?1:2; frag = Math.random()<.20; fracture = false }
+      else if(wtier===2) { bleedTier = Math.random()<.25?3:2; frag = true;             fracture = Math.random()<.30 }
+      else               { bleedTier = 3;                     frag = true;             fracture = true }
+      const injType = bleedTier===1?'BLEED_LOW':bleedTier===2?'BLEED':'BLEED_HIGH'
       S.self.zones[z] = {
-        inj:injType, bleeding:true, tq:false, fracture:Math.random()<.35, pain:true,
-        bandaged:false, tqAppliedAt:null, limbLost:false,
+        inj:injType, frag, bleeding:true, tq:false, fracture, pain:true,
+        bandaged:false, bandagesApplied:0, tqAppliedAt:null, limbLost:false,
       }
     })
-    S.self.bloodPct=100; S.self.down=true; S.self.uncon=true; S.self.dead=false; S.self.stimsThisDown=0
+    // Only a severe (tier 3) bleed knocks someone out immediately — lesser
+    // wounds leave you down-but-conscious, and only tip into unconsciousness
+    // later if blood loss actually drags you under the 25% threshold.
+    const maxTier = Math.max(0, ...Object.values(S.self.zones).map(s=>INJ[s.inj]?.tier||0))
+    const startUncon = headHit || maxTier>=3
+    S.self.bloodPct=100; S.self.down=true; S.self.uncon=startUncon; S.self.dead=headHit
+    S.self.overdosing=false; S.self.odStacks=0
+    if(headHit) S.self.hr=0
     sfx('casualty')
-    silenceAllRadios()
+    if(startUncon) silenceAllRadios() // conscious-but-down can still call for help over the net
     updateDownBtn()
     await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
       username:S.profile.username||S.member?.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid,
-      zones:S.self.zones, bloodPct:S.self.bloodPct, stimsThisDown:0,
-      down:true, uncon:true, inv:{...S.self.inv},
+      zones:S.self.zones, bloodPct:S.self.bloodPct, overdosing:false, odStacks:0,
+      down:true, uncon:startUncon, dead:headHit, ...(headHit?{hr:0}:{}), inv:{...S.self.inv},
       downdAt:Date.now(), updatedAt:serverTimestamp()
     })
     updateBodyFigure(); renderInventory()
@@ -3023,7 +3079,7 @@ function zoneColors(zones, z) {
 
 // prefix lets the same renderer drive both the self body map (no suffix) and
 // the medic's patient body map (ids suffixed '-p') without duplicating logic.
-function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='') {
+function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='', dead=S.self.dead, uncon=S.self.uncon) {
   ZONES.forEach(z=>{
     const el = $('z-'+z+prefix)
     if(!el) return
@@ -3040,12 +3096,15 @@ function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='
     ZONES.forEach(z=>{
       const s=zones[z]; if(!s) return
       const p=ICON_POS[z]
-      let ico = s.tq ? svgTQ(13) : s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.inj==='FRAG' ? svgFrag(13) : svgBleed(13,false)
+      let ico = s.tq ? svgTQ(13) : s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.frag ? svgFrag(13) : svgBleed(13,false)
       ig.innerHTML += `<foreignObject x="${p.x}" y="${p.y}" width="14" height="14">${ico}</foreignObject>`
-      // Fracture gets its own small marker too, since it'd otherwise be
-      // hidden behind a bleed/TQ icon whenever both are present on a zone.
+      // Fracture/frag each get their own small marker too, since they'd
+      // otherwise be hidden behind a bleed/TQ icon whenever combined on a zone.
       if(s.fracture && (s.tq || s.bleeding)) {
         ig.innerHTML += `<foreignObject x="${p.x+11}" y="${p.y-4}" width="11" height="11">${svgFracture(11)}</foreignObject>`
+      }
+      if(s.frag && (s.tq || s.bleeding || s.fracture)) {
+        ig.innerHTML += `<foreignObject x="${p.x-11}" y="${p.y-4}" width="11" height="11">${svgFrag(11)}</foreignObject>`
       }
     })
   }
@@ -3067,6 +3126,34 @@ function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='
   }
 
   renderOverview(zones, prefix)
+  renderCapabilitySummary(zones, dead, uncon, prefix)
+}
+
+// A limb under a live tourniquet is just as unusable as a broken one — the
+// cut circulation numbs/weakens it long before the 6-minute limb-loss timer
+// (TQ_LOSS_MS) ever fires, so it's a separate, immediate kind of impairment
+// on top of that eventual "lose the limb" risk, not the same thing.
+function getCapabilityRestrictions(zones, dead, uncon) {
+  if(dead) return ['Deceased — cannot act or speak on radio']
+  const out = []
+  if(uncon) out.push('Unconscious — cannot act or speak on radio')
+  const impaired = z => { const s=zones?.[z]; return !!(s && (s.fracture || s.tq || s.limbLost)) }
+  const armsDown = ['l_arm','r_arm'].filter(impaired).length
+  const legsDown = ['l_leg','r_leg'].filter(impaired).length
+  if(armsDown>=2) out.push('Cannot use arms — no weapon usable')
+  else if(armsDown===1) out.push('Rifle unusable — pistol only')
+  if(legsDown>=1) out.push('Cannot walk')
+  return out
+}
+
+function renderCapabilitySummary(zones, dead, uncon, prefix='') {
+  const el = $('capability-summary'+prefix)
+  if(!el) return
+  const restrictions = getCapabilityRestrictions(zones, dead, uncon)
+  if(!restrictions.length) { el.innerHTML=''; el.style.display='none'; return }
+  el.style.display='block'
+  el.innerHTML = `<div style="font-size:9px;letter-spacing:.2em;color:var(--red);margin-bottom:4px">CANNOT</div>`
+    + restrictions.map(r=>`<div style="font-size:10px;color:var(--redsoft);margin-top:2px">✕ ${r}</div>`).join('')
 }
 
 // ARMA-trauma-card-style summary: every injured zone, stacked, with each of
@@ -3095,6 +3182,7 @@ function renderOverview(zones, prefix='') {
     if(s.fracture) lines.push(`<div style="font-size:10px;color:#a78bfa">Fractured</div>`)
     if(s.pain)     lines.push(`<div style="font-size:10px;color:#a8b8cc">In pain</div>`)
     if(s.inj)      lines.push(`<div style="font-size:10px;color:${INJ[s.inj]?.color||'#8db3d4'}">1x ${INJ[s.inj]?.name||s.inj}</div>`)
+    if(s.frag)     lines.push(`<div style="font-size:10px;color:${FRAG_INFO.color}">+ ${FRAG_INFO.name}</div>`)
     return lines.join('')
   }).join('')
 }
@@ -3120,7 +3208,7 @@ function renderPatients() {
   }
   $('patients-list').innerHTML = S.patients.map(p => {
     const bleedCnt = Object.values(p.zones||{}).filter(s=>s.bleeding&&!s.tq).length
-    const tqCnt    = Object.values(p.zones||{}).filter(s=>s.tq).length
+    const tqZones  = ZONES.filter(z=>p.zones?.[z]?.tq)
     const bPct     = p.bloodPct??100
     const bColor   = p.dead?'#9ca3af':bPct<40?'var(--red)':bPct<70?'var(--amber)':'var(--green)'
     return `
@@ -3137,9 +3225,9 @@ function renderPatients() {
       </div>
       <div style="display:flex;gap:10px;font-size:10px">
         ${bleedCnt>0?`<span style="color:var(--red)">${bleedCnt} BLEED</span>`:''}
-        ${tqCnt>0?`<span style="color:var(--amber)">${tqCnt} TQ</span>`:''}
         ${Object.keys(p.zones||{}).length===0?`<span style="color:var(--accent)">NO INJURIES LOGGED</span>`:''}
       </div>
+      ${tqZones.length>0?`<div style="display:flex;align-items:center;gap:5px;margin-top:6px;padding:4px 7px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3)">${svgTQ(12)}<span style="font-size:10px;color:var(--amber);font-weight:700">TQ: ${tqZones.map(z=>ZONE_LABEL[z]).join(', ')}</span></div>`:''}
       <div style="font-size:9px;color:var(--hi);margin-top:6px">${p.dead?'No treatment possible':'→ Click to treat'}</div>
     </div>`
   }).join('')
@@ -3184,7 +3272,7 @@ window.openPatientTreat = (patientId) => {
   S.openPatientId = patientId
 
   document.body.insertAdjacentHTML('beforeend',`
-    <div id="zone-picker-modal" class="modal-bg" onclick="document.getElementById('zone-picker-modal').remove()">
+    <div id="zone-picker-modal" class="modal-bg" onclick="closePatientCard()">
       <div class="modal-box" style="max-width:640px;padding:16px" onclick="event.stopPropagation()">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px">
           <div class="orb" style="font-size:11px;color:var(--hi)">CASUALTY — ${patientDisplayName(patient)}</div>
@@ -3195,22 +3283,22 @@ window.openPatientTreat = (patientId) => {
           <div>
             <div style="font-size:9px;letter-spacing:.2em;color:var(--accent);margin-bottom:2px">OVERVIEW</div>
             <div id="overview-p" style="max-height:230px;overflow-y:auto"></div>
+            <div id="capability-summary-p" style="display:none;margin-top:10px;padding:8px 10px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.06)"></div>
             <button class="btn" onclick="openTreat('torso','patient')" style="width:100%;padding:9px;font-size:11px;letter-spacing:.18em;margin-top:14px">STIM / DEP / BLOOD BAG</button>
           </div>
         </div>
       </div>
     </div>
   `)
-  updateBodyFigure(patient.zones||{}, patient.bloodPct??100, '-p')
+  updateBodyFigure(patient.zones||{}, patient.bloodPct??100, '-p', patient.dead, patient.uncon)
 }
 
 // A medic can declare a treated patient stable and clear them off the
 // casualty board — doesn't require the patient to self-revive.
 window.clearPatient = async (patientId) => {
   await deleteDoc(doc(db,'medical',S.cardId,'patients',patientId))
-  document.getElementById('zone-picker-modal')?.remove()
   if($('treat-modal')) $('treat-modal').style.display='none'
-  if(S.openPatientId===patientId) S.openPatientId=null
+  closePatientCard()
   sfx('revive')
 }
 
@@ -3218,8 +3306,11 @@ window.clearPatient = async (patientId) => {
 // TREATMENT MODAL
 // ════════════════════════════════════════════════════════════════════════════
 window.openTreat = (zone, target='self') => {
-  // Remove zone picker if open
-  document.getElementById('zone-picker-modal')?.remove()
+  // Hide (don't remove) the patient-card modal if open, so closing the
+  // treat panel can return to it instead of dumping the medic all the way
+  // back out to the patients list.
+  const zpmOnOpen = document.getElementById('zone-picker-modal')
+  if(zpmOnOpen) zpmOnOpen.style.display = 'none'
 
   S.openZone = zone
   if(target!=='patient') S.openPatientId = null
@@ -3248,7 +3339,8 @@ window.openTreat = (zone, target='self') => {
   } else if(s?.limbLost) {
     st = `<div style="font-size:12px;color:#6b7280;font-weight:700">✕ LIMB LOST — tourniquet was left on too long</div>`
   } else if(s) {
-    st += `<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${s.inj==='FRAG'?svgFrag(13):svgBleed(13,false)}<span style="color:${injInfo?.color||'#8db3d4'};font-weight:700">${s.inj}</span><span style="color:#a8b8cc">· ${injInfo?.name||''}</span></div>`
+    st += `<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgBleed(13,false)}<span style="color:${injInfo?.color||'#8db3d4'};font-weight:700">${s.inj}</span><span style="color:#a8b8cc">· ${injInfo?.name||''}</span></div>`
+    if(s.frag) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">+ ${FRAG_INFO.name.toUpperCase()}</span></div>`
     if(s.tq)      st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgTQ(13)}<span style="color:var(--amber);font-weight:700">TOURNIQUET APPLIED</span></div>`
     else if(s.bleeding) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgBleed(13,false)}<span style="color:var(--red);font-weight:700">ACTIVE BLEEDING</span></div>`
     else st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING CONTROLLED</div>`
@@ -3256,6 +3348,9 @@ window.openTreat = (zone, target='self') => {
       const tqMs = Date.now()-s.tqAppliedAt
       if(tqMs>=TQ_WARN_MS) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ TQ ON ${Math.floor(tqMs/60000)}m — REMOVE OR LOSE LIMB SOON</div>`
     }
+    // Doesn't reveal exactly how many more are needed — just that it's not
+    // fully packed yet, so the player keeps bandaging until it sticks.
+    if(!s.bandaged && (s.bandagesApplied||0)>0 && s.bleeding) st+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">Wound partially packed — keep bandaging</div>`
     if(s.bandaged && s.tq) st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">Wound packed — safe to remove TQ</div>`
     if(s.fracture) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-top:4px">${svgFracture(13)}<span style="color:#a78bfa;font-weight:700">FRACTURED</span></div>`
     if(s.pain)     st+=`<div style="font-size:11px;color:#a8b8cc;margin-top:4px">In pain</div>`
@@ -3286,14 +3381,14 @@ window.openTreat = (zone, target='self') => {
   const inv = S.self.inv
 
   const treats = [
-    {id:'bandage',    label:'BANDAGE',    color:'#4ade80', timeSec:s?.inj==='FRAG'?15:5, desc:s?.inj==='FRAG'?'Pack frag — 15s':'Stop bleed — 5s'},
+    {id:'bandage',    label:'BANDAGE',    color:'#4ade80', timeSec:s?.frag?15:5, desc:s?.frag?'Pack frag — 15s':'Stop bleed — 5s'},
     s?.tq
       ? {id:'remove_tourniquet', label:'REMOVE TQ', color:'#fbbf24', timeSec:2, desc:s?.bandaged?'Wound is packed — safe':'⚠ Resumes bleeding — 2s', noInv:true}
       : {id:'tourniquet', label:'TOURNIQUET', color:'#fbbf24', timeSec:3, desc:isLimb?'Fast stop — 3s':'❌ LIMBS ONLY', locked:!isLimb},
     ...(s?.fracture ? [{id:'splint', label:'SPLINT', color:'#a78bfa', timeSec:6, desc:'Fix fracture — 6s'}] : []),
     {id:'stim',       label:'STIMULANT',  color:'#a78bfa', timeSec:3,
-      desc: !patient.uncon ? '☠ FATAL — cardiac arrest' : (patient.stimsThisDown||0)>=1 ? '☠ 2nd dose — cardiac burst' : 'Wake patient — 3s'},
-    {id:'depressant', label:'DEPRESSANT', color:'#60a5fa', timeSec:3, desc:'Lower HR — 3s'},
+      desc: !patient.uncon ? `⚠ HR→200+ · ${Math.min(100,2*((patient.odStacks||0)+1))}% death risk` : 'Wake patient — 3s'},
+    {id:'depressant', label:'DEPRESSANT', color:'#60a5fa', timeSec:3, desc: patient.overdosing?'Clears OD — 3s':'Lower HR — 3s'},
     {id:'blood',      label:'BLOOD BAG',  color:'#dc2626', timeSec:10,desc:'Restore +40% — 10s'},
   ]
 
@@ -3319,7 +3414,20 @@ window.openTreat = (zone, target='self') => {
 }
 
 window.treatModalBgClick = (e) => { if(!S.applying) closeTreat() }
-window.closeTreat = () => { if(!S.applying){ $('treat-modal').style.display='none'; S.openZone=null } }
+window.closeTreat = () => {
+  if(S.applying) return
+  $('treat-modal').style.display='none'
+  S.openZone=null
+  // Return to the patient card we were treating from, if any, instead of
+  // dumping back out to the patients list.
+  const zpm = document.getElementById('zone-picker-modal')
+  if(zpm) zpm.style.display = 'flex'
+}
+
+window.closePatientCard = () => {
+  document.getElementById('zone-picker-modal')?.remove()
+  S.openPatientId = null
+}
 
 let applyInterval = null
 
@@ -3333,9 +3441,9 @@ window.startApply = (zone, treatment, target) => {
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
     : { zones:S.self.zones, inj:S.self.zones[zone]?.inj }
-  const inj = patient?.zones?.[zone]?.inj
+  const frag = patient?.zones?.[zone]?.frag
   let dur = APPLY_MS[treatment]||3000
-  if(treatment==='bandage') dur = inj==='FRAG' ? APPLY_MS.bandage_frag : APPLY_MS.bandage_bleed
+  if(treatment==='bandage') dur = frag ? APPLY_MS.bandage_frag : APPLY_MS.bandage_bleed
 
   S.applying = { zone, treatment, target, patientId:S.openPatientId, duration:dur, startedAt:Date.now() }
   $('treat-prog-wrap').style.display='block'
@@ -3381,13 +3489,23 @@ async function finishApply(a) {
   const isSelf = target!=='patient'
   const patient = isSelf ? null : S.patients.find(p=>p.id===patientId)
 
-  const zoneDefault = () => ({inj:null,bleeding:false,tq:false,bandaged:false,tqAppliedAt:null,limbLost:false})
+  const zoneDefault = () => ({inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,tqAppliedAt:null,limbLost:false})
+
+  // A wound needs as many bandage applications as its severity tier calls
+  // for (BANDAGES_NEEDED) before it's actually packed — the player is never
+  // told the number up front, they just keep bandaging until it stops.
+  // Packing "counts" even under a live TQ, same as before, so hitting the
+  // full count while a TQ is on still marks it safe to pull.
+  function applyBandage(zs) {
+    if(!zs) return
+    zs.bandagesApplied = (zs.bandagesApplied||0)+1
+    const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
+    if(zs.bandagesApplied>=need) { zs.bleeding=false; zs.bandaged=true }
+  }
 
   if(treatment==='bandage') {
-    // Packing the wound "counts" even under a live TQ — that's what makes
-    // it safe to pull the TQ afterward instead of bleeding resuming.
-    if(isSelf) { if(S.self.zones[zone]) { S.self.zones[zone].bleeding=false; S.self.zones[zone].bandaged=true } }
-    else if(patient?.zones?.[zone]) { patient.zones[zone].bleeding=false; patient.zones[zone].bandaged=true }
+    if(isSelf) applyBandage(S.self.zones[zone])
+    else applyBandage(patient?.zones?.[zone])
     S.self.inv.bandage = Math.max(0,(S.self.inv.bandage||0)-1)
   } else if(treatment==='tourniquet'&&LIMBS.includes(zone)) {
     if(isSelf) {
@@ -3414,29 +3532,39 @@ async function finishApply(a) {
     else if(patient?.zones?.[zone]) { patient.zones[zone].fracture=false }
     S.self.inv.splint = Math.max(0,(S.self.inv.splint||0)-1)
   } else if(treatment==='stim') {
-    // Conscious + stim = instant cardiac arrest. Unconscious + a 2nd dose
-    // this "down" episode = cardiac burst. Either way it's fatal — this
-    // isn't a free wake-up button.
+    // Unconscious -> stim wakes them up clean, no risk. Conscious -> stim is
+    // an overdose: heart rate spikes into the 200-250 danger band, and every
+    // additional dose taken while still in that band stacks another +2% on
+    // top of the running chance of cardiac death (rolled on that dose).
     const wasUncon = isSelf ? S.self.uncon : patient?.uncon
+    function applyStim(obj) {
+      if(wasUncon) {
+        obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95
+      } else {
+        obj.odStacks=(obj.odStacks||0)+1
+        obj.overdosing=true
+        obj.hr=200+Math.floor(Math.random()*51) // 200-250
+        if(Math.random() < Math.min(1, 0.02*obj.odStacks)) {
+          obj.dead=true; obj.uncon=true; obj.overdosing=false; obj.hr=0
+        }
+      }
+    }
     if(isSelf) {
-      S.self.stimsThisDown = (S.self.stimsThisDown||0)+1
-      if(!wasUncon || S.self.stimsThisDown>=2) {
-        S.self.dead=true; S.self.uncon=true; S.self.hr=0
-        silenceAllRadios()
-      } else {
-        S.self.uncon=false
-      }
+      applyStim(S.self)
+      if(S.self.dead) silenceAllRadios()
     } else if(patient) {
-      patient.stimsThisDown = (patient.stimsThisDown||0)+1
-      if(!wasUncon || patient.stimsThisDown>=2) {
-        patient.dead=true; patient.uncon=true; patient.hr=0
-      } else {
-        patient.uncon=false
-      }
+      applyStim(patient)
     }
     S.self.inv.stim = Math.max(0,(S.self.inv.stim||0)-1)
   } else if(treatment==='depressant') {
-    if(isSelf) S.self.hr=55
+    // Clears an active overdose outright (that's the point of countering a
+    // stim with a depressant) — otherwise it's just a normal HR-lowering aid.
+    function applyDepressant(obj) {
+      if(obj.overdosing) { obj.hr=78; obj.overdosing=false; obj.odStacks=0 }
+      else obj.hr=55
+    }
+    if(isSelf) applyDepressant(S.self)
+    else if(patient) applyDepressant(patient)
     S.self.inv.depressant = Math.max(0,(S.self.inv.depressant||0)-1)
   } else if(treatment==='blood') {
     if(isSelf) S.self.bloodPct = Math.min(100,(S.self.bloodPct||0)+40)
@@ -3456,19 +3584,22 @@ async function finishApply(a) {
   // two medics treated the same patient around the same time — whichever
   // write landed second would silently overwrite the first medic's change
   // with its own (already-stale) local copy of the zone it never touched.
-  // Same reasoning applies to bloodPct/uncon/dead/stimsThisDown — only
+  // Same reasoning applies to bloodPct/uncon/dead/overdosing/odStacks — only
   // included when this specific treatment actually changes them.
   try {
     if(isSelf) {
       const upd = { [`zones.${zone}`]: S.self.zones[zone], inv:S.self.inv, updatedAt:serverTimestamp() }
       if(treatment==='blood') upd.bloodPct = S.self.bloodPct
       if(treatment==='stim' || treatment==='depressant') upd.hr = S.self.hr
-      if(treatment==='stim') { upd.uncon=S.self.uncon; upd.dead=S.self.dead; upd.stimsThisDown=S.self.stimsThisDown }
+      if(treatment==='stim' || treatment==='depressant') { upd.overdosing=S.self.overdosing; upd.odStacks=S.self.odStacks }
+      if(treatment==='stim') { upd.uncon=S.self.uncon; upd.dead=S.self.dead }
       await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid), upd, {merge:true})
     } else if(patient) {
       const upd = { [`zones.${zone}`]: patient.zones[zone], updatedAt:serverTimestamp() }
       if(treatment==='blood') upd.bloodPct = patient.bloodPct
-      if(treatment==='stim') { upd.hr=patient.hr; upd.uncon=patient.uncon; upd.dead=patient.dead; upd.stimsThisDown=patient.stimsThisDown }
+      if(treatment==='stim' || treatment==='depressant') upd.hr = patient.hr
+      if(treatment==='stim' || treatment==='depressant') { upd.overdosing=patient.overdosing; upd.odStacks=patient.odStacks }
+      if(treatment==='stim') { upd.uncon=patient.uncon; upd.dead=patient.dead }
       await setDoc(doc(db,'medical',S.cardId,'patients',patientId), upd, {merge:true})
       // Deduct from medic's own inventory
       await setDoc(doc(db,'medical',S.cardId,'patients',S.user.uid),{
@@ -3480,7 +3611,12 @@ async function finishApply(a) {
   }
 
   sfx('treatment-done')
-  updateBodyFigure()
+  // Refresh whichever body map/overview this treatment actually applied to
+  // — the patient card behind the treat modal was only hidden, not rebuilt,
+  // so it needs its own explicit redraw or it'd show stale state once the
+  // player closes back out to it.
+  if(isSelf) updateBodyFigure()
+  else if(patient) updateBodyFigure(patient.zones||{}, patient.bloodPct??100, '-p', patient.dead, patient.uncon)
   updateDownBtn()
   renderInventory()
   $('treat-prog-wrap').style.display='none'
@@ -3544,9 +3680,13 @@ function startTickers() {
     if(S.self.down) base=S.self.uncon?145:110
     if(S.self.bloodPct<40) base+=32
     else if(S.self.bloodPct<70) base+=16
-    S.self.hr = Math.round(Math.max(38,Math.min(220, base+(Math.random()-.5)*6+(S.self.hr-base)*0.28)))
+    // Stim overdose overrides everything else — heart rate sits pinned in
+    // the 200-250 danger band until a depressant clears it.
+    if(S.self.overdosing) base=225
+    const hrCap = S.self.overdosing ? 250 : 220
+    S.self.hr = Math.round(Math.max(38,Math.min(hrCap, base+(Math.random()-.5)*6+(S.self.hr-base)*0.28)))
     const pSec=(60/Math.max(20,S.self.hr)).toFixed(2)
-    const hC = S.self.down?'#ef4444':'#4ade80'
+    const hC = S.self.overdosing?'#dc2626':S.self.down?'#ef4444':'#4ade80'
     const vC = S.self.bloodPct<40?'#dc2626':S.self.down?'#fbbf24':'#4ade80'
     if(h){h.textContent=S.self.hr;h.style.color=hC;h.style.animation=`hb ${pSec}s ease-in-out infinite`}
     if(ht){ht.setAttribute('fill',hC);ht.setAttribute('stroke',hC);ht.style.animation=`hb ${pSec}s ease-in-out infinite`}
@@ -3584,12 +3724,15 @@ function startTickers() {
     }
   },5000)
 
-  // Blood drain
+  // Blood drain — rate is the sum of every actively-bleeding zone's own
+  // tier-based bleedRate (see INJ), so a single low-velocity arm wound
+  // drains far slower than a torso hit, and multiple wounds stack.
   setInterval(async () => {
     if(!S.cardId||!S.self.down||S.self.dead) return
-    const bleed=Object.values(S.self.zones).some(s=>s.bleeding&&!s.tq)
-    if(bleed){
-      S.self.bloodPct=Math.max(0,S.self.bloodPct-1.2)
+    const bleedingZones = Object.values(S.self.zones).filter(s=>s.bleeding&&!s.tq)
+    if(bleedingZones.length){
+      const rate = bleedingZones.reduce((sum,s)=>sum+(INJ[s.inj]?.bleedRate ?? 1.0), 0)
+      S.self.bloodPct=Math.max(0,S.self.bloodPct-rate)
       updateBodyFigure()
 
       if(S.self.bloodPct<=0) {
@@ -3770,6 +3913,14 @@ window.listenRadioPTTKey = (side) => {
   document.addEventListener('keydown',handler,true)
 }
 
+window.unbindRadioPTTKey = (side) => {
+  if(radioPTTListening===side) return
+  S.radioPTTKeys[side] = null
+  radioPTTHeld[side] = false
+  const btn = $(side==='left' ? 'radio-ptt-left-btn' : 'radio-ptt-right-btn')
+  if(btn) btn.textContent = 'UNSET'
+}
+
 // Finds the currently-joined radio (if any) assigned to a given ear
 function findRadioOnEar(side) {
   for(const chanId of S.activeChanIds) {
@@ -3876,6 +4027,13 @@ window.listenEarKey = (side) => {
     earKeyListening = null
   }
   document.addEventListener('keydown',handler,true)
+}
+
+window.unbindEarKey = (side) => {
+  if(earKeyListening===side) return
+  S.earTestKeys[side] = null
+  const btn = $(side==='left' ? 'ear-left-key-btn' : 'ear-right-key-btn')
+  if(btn) btn.textContent = 'UNSET'
 }
 
 document.addEventListener('keydown',e=>{
@@ -4335,7 +4493,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     if($('treat-modal').style.display!=='none'&&!S.applying) closeTreat()
     if($('drawer-9l').style.display!=='none') close9L()
-    document.getElementById('zone-picker-modal')?.remove()
+    closePatientCard()
   }
 })
 $('lak')?.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin() })
