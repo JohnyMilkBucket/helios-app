@@ -15,6 +15,25 @@
 // update, this SW kept serving the pre-update medical.js from cache
 // forever, so new event-logging code never ran, with zero errors thrown).
 // Network-first with a cache fallback (for offline use only) fixes it.
+// Background push (Firebase Cloud Messaging) — handles notifications that
+// arrive while no tab has this app open. Uses the compat SDK because
+// service workers can't use the ES-module imports the rest of this app
+// uses. Foreground pushes (tab open) are handled entirely client-side by
+// alertUser() in index.html instead — FCM's onMessage would double up
+// with that, so it's deliberately not wired here.
+importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js')
+importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js')
+firebase.initializeApp({
+  apiKey:            "AIzaSyCcWbbwl_fa5qu44UUpMqk1DQThvRnoRwM",
+  authDomain:        "helios-app-c803f.firebaseapp.com",
+  databaseURL:       "https://helios-app-c803f-default-rtdb.firebaseio.com",
+  projectId:         "helios-app-c803f",
+  storageBucket:     "helios-app-c803f.firebasestorage.app",
+  messagingSenderId: "165365716131",
+  appId:             "1:165365716131:web:fb5742d047df5c4aed5b16",
+})
+firebase.messaging() // registers the default background-message handler
+
 const CACHE = 'helios-mobile-v2'
 const STATIC = ['manifest.json', 'icons/icon-192.png', 'icons/icon-512.png']
 const NETWORK_FIRST = ['js/medical.js']

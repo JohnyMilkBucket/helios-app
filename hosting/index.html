@@ -163,9 +163,13 @@ button{font-family:inherit;cursor:pointer}
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, query, where, orderBy, limit }
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, onSnapshot, serverTimestamp, query, where, orderBy, limit, arrayUnion }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
+import { getMessaging, getToken, isSupported as isMessagingSupported }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js'
 import * as Medical from './js/medical.js'
+
+const VAPID_KEY = 'BOCVKWltwKSuR0XrqBfQh7TClWsW4ULZDekHmgLT6VElEgvV8C17tfMI4SByyxG_H4qqj2FuR2lYt0h1cmD18a8'
 
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyCcWbbwl_fa5qu44UUpMqk1DQThvRnoRwM",
@@ -225,11 +229,24 @@ function alertUser(title, body) {
     try { new Notification(title, { body, icon: 'icons/icon-192.png' }) } catch(e) {}
   }
 }
+// True push-while-closed, via FCM. Requires the service worker (for the
+// background handler in sw.js) and notification permission. Best-effort —
+// any failure here just means no push, the foreground alertUser() path
+// above still works regardless.
+async function registerPushToken() {
+  try {
+    if (!S.cardId || !S.user) return
+    if (!(await isMessagingSupported())) return
+    const reg = await navigator.serviceWorker.ready
+    const token = await getToken(getMessaging(app), { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg })
+    if (token) await setDoc(doc(db,'cards',S.cardId,'members',S.user.uid), { fcmTokens: arrayUnion(token) }, {merge:true})
+  } catch(e) {}
+}
 window.enableAlerts = async () => {
   if (!window.Notification) return
   const perm = await Notification.requestPermission()
   $('alerts-btn')?.classList.toggle('hidden', perm !== 'default')
-  if (perm === 'granted') playAlertTone()
+  if (perm === 'granted') { playAlertTone(); await registerPushToken() }
 }
 // Hide the button entirely once a decision (either way) has already been made.
 if (!window.Notification || Notification.permission !== 'default') {
@@ -362,6 +379,7 @@ async function enterCard(cardId) {
     S.units = snap.docs.map(d=>({id:d.id,...d.data()}))
     renderOrgView()
   }))
+  if (window.Notification?.permission === 'granted') registerPushToken()
 
   switchView('dashboard')
 }

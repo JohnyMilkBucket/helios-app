@@ -3,6 +3,13 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.9
+- Mobile companion now sends real push notifications for medical events
+  (new casualty, you died, unconscious, tourniquet-too-long) — these arrive
+  even when the app is fully closed, as long as you've granted notification
+  permission via "Enable Alerts." Backed by a new Cloud Function reacting to
+  casualty writes in Firestore.
+
 ## v1.4.8
 - Mobile companion gets a new ORG tab: read-only ORBAT (units, sub-units,
   assigned members) and Roles (perms, loadouts, member counts).
