@@ -383,6 +383,24 @@ html.popout-mode #content{padding:10px 12px}
      LICENSE EXPIRED — shown instead of the app when the
      current card's license key has lapsed
      ════════════════════════════════════════════════════ -->
+<div id="banned-screen" class="fullscreen" style="display:none">
+  <div style="width:100%;max-width:420px">
+    <div style="text-align:center;margin-bottom:24px">
+      <div class="orb" style="font-size:22px;font-weight:700;letter-spacing:.2em;color:var(--red)">ACCOUNT SUSPENDED</div>
+    </div>
+    <div class="panel" style="padding:20px;margin-bottom:14px">
+      <div style="font-size:11px;color:#a8b8cc;text-align:center;line-height:1.7">
+        This account has been suspended and can't use Helios.<br>
+        <span id="banned-reason" style="color:var(--accent)"></span>
+        <br>To appeal, contact the person who runs your Helios instance.
+      </div>
+    </div>
+    <div style="text-align:center">
+      <button class="btn" onclick="doLogout()" style="font-size:9px;letter-spacing:.15em;color:var(--redsoft);border-color:rgba(239,68,68,.3)">LOGOUT</button>
+    </div>
+  </div>
+</div>
+
 <div id="license-expired-screen" class="fullscreen" style="display:none">
   <div style="width:100%;max-width:420px">
     <div style="text-align:center;margin-bottom:24px">
@@ -509,6 +527,10 @@ html.popout-mode #content{padding:10px 12px}
         <button onclick="switchTab('roles',this)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           ROLES
+        </button>
+        <button onclick="switchTab('rules',this)">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+          RULES
         </button>
         <button onclick="switchTab('jointops',this)">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
@@ -741,6 +763,25 @@ html.popout-mode #content{padding:10px 12px}
             <button class="btn btn-blue" id="new-role-btn" style="display:none;font-size:9px" onclick="showNewRoleModal()">+ NEW ROLE</button>
           </div>
           <div id="roles-list"></div>
+        </div>
+
+        <!-- RULES TAB -->
+        <div id="tab-rules" class="tab">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+            <div>
+              <div style="font-size:9px;letter-spacing:.3em;color:var(--accent)">FACTION SOP</div>
+              <h2 class="orb" style="font-size:19px;font-weight:700;margin-top:4px">RULES</h2>
+            </div>
+            <button class="btn btn-blue" id="rules-edit-btn" style="display:none;font-size:9px" onclick="toggleRulesEdit()">EDIT</button>
+          </div>
+          <div id="rules-list" style="font-size:12px;color:#c2d2e2;line-height:1.9"></div>
+          <div id="rules-edit-wrap" style="display:none;margin-top:10px">
+            <textarea id="rules-edit-textarea" placeholder="One rule per line, e.g.&#10;Shot in the leg = you're down until treated, no running.&#10;Headshots are an instant kill regardless of armor." style="width:100%;min-height:220px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.12);color:#e8eef5;font-size:12px;line-height:1.7;padding:10px;font-family:inherit;resize:vertical"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn btn-green" style="font-size:9px" onclick="saveRules()">SAVE</button>
+              <button class="btn" style="font-size:9px" onclick="toggleRulesEdit()">CANCEL</button>
+            </div>
+          </div>
         </div>
 
         <!-- SETTINGS TAB -->
@@ -1400,6 +1441,10 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.10', items:[
+    'Added a RULES tab (desktop + mobile) — your faction\'s own SOP, written by admins, visible to everyone.',
+    'Suspended accounts are now stopped at login with an appeal message instead of reaching the app.',
+  ]},
   { v:'1.4.9', items:[
     'Mobile companion now sends real push notifications for medical events (new casualty, you died, unconscious, tourniquet-too-long) — these arrive even if the app is closed, as long as you\'ve granted notification permission via "Enable Alerts."',
   ]},
@@ -1481,6 +1526,10 @@ const TUTORIALS = {
   roles: { title:'ROLES', steps:[
     'Roles define what a member can do — treat other players, create Operations, edit brevity codes, or administer the card — plus their starting supply loadout.',
     'Admins create roles here and assign them to members. A member\'s loadout is refilled to their role\'s numbers whenever an Operation starts.',
+  ]},
+  rules: { title:'RULES', steps:[
+    'Rules are your faction\'s own SOP — admins write them, everyone on the card can read them.',
+    'Use them for whatever mirrors your group\'s in-game conventions: injury/limping rules, friendly fire policy, comms etiquette, whatever isn\'t already enforced by Medical or Comms.',
   ]},
   jointops: { title:'JOINT OPERATIONS', steps:[
     'Joint Ops let two or more separate factions (cards) coordinate on the same mission without merging their rosters.',
@@ -1952,6 +2001,7 @@ async function enterCard(cardId) {
     const atb=$('admin-tab-btn'); if(atb) atb.style.display='flex'
     $('regen-code-btn').style.display='inline-block'
     $('regen-wrap').style.display='block'
+    const reb=$('rules-edit-btn'); if(reb) reb.style.display='inline-block'
   }
   if(S.member.canTreatOthers||S.member.isAdmin) {
     $('med-view-toggle').style.display='flex'
@@ -1985,6 +2035,7 @@ function subscribeAll(cardId) {
     $('tb-card-name').textContent = S.card.name||''
     $('sl-card-name').textContent = S.card.name||''
     updateCardSettingsUI()
+    renderRulesTab()
   }))
 
   // Members
@@ -4780,6 +4831,42 @@ window.saveCardName = async () => {
   await setDoc(doc(db,'cards',S.cardId),{name},{merge:true})
 }
 
+// Faction-authored SOP text — separate from the fixed OP_TYPES rule presets
+// above (those describe radio discipline per joint-op type; these are
+// whatever a faction's admins want documented, e.g. injury/limping
+// conventions, friendly fire policy). Stored as a plain string array on the
+// card doc itself, so it rides the same onSnapshot listener as name/
+// inviteCode — no separate subscription needed.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+
+function renderRulesTab() {
+  const el = $('rules-list')
+  if(!el) return
+  const rules = S.card?.rules || []
+  if(!rules.length) {
+    el.innerHTML = `<div style="color:#5b7590;font-size:11px">No rules have been set for this faction yet.${S.member?.isAdmin ? ' Click EDIT to add some.' : ''}</div>`
+    return
+  }
+  el.innerHTML = rules.map((r,i) => `<div style="display:flex;gap:8px;margin-bottom:4px"><span style="color:var(--accent);flex-shrink:0">${i+1}.</span><span>${escapeHtml(r)}</span></div>`).join('')
+}
+
+window.toggleRulesEdit = () => {
+  const wrap = $('rules-edit-wrap')
+  const showing = wrap.style.display !== 'none'
+  wrap.style.display = showing ? 'none' : 'block'
+  $('rules-list').style.display = showing ? 'block' : 'none'
+  if(!showing) $('rules-edit-textarea').value = (S.card?.rules||[]).join('\n')
+}
+
+window.saveRules = async () => {
+  const raw = $('rules-edit-textarea')?.value || ''
+  const rules = raw.split('\n').map(r=>r.trim()).filter(Boolean)
+  await setDoc(doc(db,'cards',S.cardId),{rules},{merge:true})
+  toggleRulesEdit()
+}
+
 // Wipes every casualty record on the card — meant for end-of-op cleanup so
 // the next op doesn't start with everyone still marked as bled-out from the
 // last one. Each affected player's own MY STATUS clears itself automatically
@@ -4816,6 +4903,16 @@ onAuthStateChanged(auth, async user => {
   // Load profile
   const profSnap = await getDoc(doc(db,'users',user.uid))
   S.profile = profSnap.exists() ? profSnap.data() : { username:user.email?.split('@')[0]||'UNKNOWN' }
+
+  // Suspended accounts get stopped here, before any card/app UI shows —
+  // this is the only enforcement point since there's no backend to gate
+  // sign-in itself; the account can still authenticate, it just never gets
+  // past this screen.
+  if(S.profile.banned) {
+    $('banned-reason').textContent = S.profile.banReason ? `Reason: ${S.profile.banReason}` : ''
+    $('banned-screen').style.display = 'flex'
+    return
+  }
 
   // Check if they have a card
   if(S.profile.currentCard) {

@@ -38,7 +38,7 @@ button{font-family:inherit;cursor:pointer}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:14px;margin-bottom:12px}
 .label{font-size:9px;letter-spacing:.25em;color:var(--accent);margin-bottom:8px}
 .err{color:var(--redsoft);font-size:11px;margin-top:8px;min-height:14px}
-#screen-auth,#screen-cards{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+#screen-auth,#screen-cards,#screen-banned{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
 .authbox{width:100%;max-width:360px}
 .authbox h1{font-family:'Orbitron',sans-serif;font-size:26px;text-align:center;letter-spacing:.15em}
 .authbox .sub{text-align:center;font-size:9px;letter-spacing:.25em;color:var(--accent);margin:6px 0 18px}
@@ -112,6 +112,21 @@ button{font-family:inherit;cursor:pointer}
     </div>
     <div class="notice" style="margin-top:16px">
       Same account as the desktop app — log in with the same username &amp; password.
+    </div>
+  </div>
+</div>
+
+<!-- BANNED -->
+<div id="screen-banned" class="hidden">
+  <div class="authbox">
+    <h1 style="color:var(--red)">SUSPENDED</h1>
+    <div class="notice" style="margin-top:12px">
+      This account has been suspended and can't use Helios.<br>
+      <span id="banned-reason"></span>
+      <br>To appeal, contact the person who runs your Helios instance.
+    </div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" style="flex:1;color:var(--redsoft)" onclick="doLogout()">LOGOUT</button>
     </div>
   </div>
 </div>
@@ -408,7 +423,7 @@ function subscribeJointOp(joId) {
   }))
 }
 function show(id) {
-  ['screen-auth','screen-cards','screen-app'].forEach(s=>$(s).classList.toggle('hidden', s!==id))
+  ['screen-auth','screen-cards','screen-app','screen-banned'].forEach(s=>$(s).classList.toggle('hidden', s!==id))
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────
@@ -602,12 +617,21 @@ function renderZoneTreatRow(zone, zs, inv) {
   return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[zone]}<br><span style="color:${st.color};font-size:9px">${st.text}</span></span><span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">${actions.join('')||'<span style="font-size:9px;color:var(--accent)">—</span>'}</span></div>`
 }
 
-// ── ORG (read-only ORBAT + Roles) ───────────────────────────────────────
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+
+// ── ORG (read-only ORBAT + Roles + Rules) ───────────────────────────────
 function renderOrgView() {
   const el = $('view-org')
   if(!S.cardId) return
   const nameOf = uid => S.members.find(m=>(m.uid||m.id)===uid)?.username || uid
+  const rules = S.card?.rules || []
   el.innerHTML = `
+    <div class="panel">
+      <div class="label">RULES</div>
+      ${rules.length ? rules.map((r,i)=>`<div style="display:flex;gap:7px;font-size:11px;color:#c2d2e2;padding:3px 0"><span style="color:var(--accent);flex-shrink:0">${i+1}.</span><span>${escapeHtml(r)}</span></div>`).join('') : '<div style="font-size:11px;color:var(--accent);text-align:center;padding:14px">No rules set</div>'}
+    </div>
     <div class="panel">
       <div class="label">ROLES</div>
       ${S.roles.length ? S.roles.map(role => {
@@ -644,6 +668,11 @@ onAuthStateChanged(auth, async user => {
   if(!user) { show('screen-auth'); return }
   const profSnap = await getDoc(doc(db,'users',user.uid))
   S.profile = profSnap.exists() ? profSnap.data() : { username:user.email?.split('@')[0]||'UNKNOWN', cardIds:[] }
+  if(S.profile.banned) {
+    $('banned-reason').textContent = S.profile.banReason ? `Reason: ${S.profile.banReason}` : ''
+    show('screen-banned')
+    return
+  }
   if(S.profile.currentCard) {
     const memSnap = await getDoc(doc(db,'cards',S.profile.currentCard,'members',user.uid))
     if(memSnap.exists()) { await enterCard(S.profile.currentCard); return }

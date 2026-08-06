@@ -3,6 +3,14 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.10
+- Added a RULES tab (desktop + mobile) — your faction's own SOP text,
+  written and edited by admins, visible to every member. Separate from the
+  fixed radio-discipline presets under Joint Ops op types.
+- Suspended accounts (managed from the separate admin panel) now get
+  stopped at login with an appeal message instead of reaching the app, on
+  both desktop and mobile.
+
 ## v1.4.9
 - Mobile companion now sends real push notifications for medical events
   (new casualty, you died, unconscious, tourniquet-too-long) — these arrive

@@ -64,10 +64,13 @@ service cloud.firestore {
     }
 
     // -- Users --
-    // Each user can read/write their own profile
+    // Each user can read/write their own profile. Sidious can also write any
+    // user's profile - needed to set/clear the banned flag from the admin
+    // panel (account suspension has no other enforcement point, since this
+    // app has no backend of its own to gate sign-in server-side).
     match /users/{userId} {
       allow read:  if isAuthed();
-      allow write: if isAuthed() && request.auth.uid == userId;
+      allow write: if isAuthed() && (request.auth.uid == userId || isOwnerAdmin());
     }
 
     // -- Invite codes (cards) --
@@ -109,7 +112,10 @@ service cloud.firestore {
 
     // -- Cards (faction workspaces) --
     match /cards/{cardId} {
-      allow read:  if isCardMember(cardId);
+      // isOwnerAdmin() (Sidious) can read/list every card - powers the "all
+      // cards" table in the separate admin key-generator app, and lets that
+      // same account read every subcollection below when deleting a card.
+      allow read:  if isCardMember(cardId) || isOwnerAdmin();
       // Sidious can always create a card. Everyone else must reference a
       // real, not-yet-activated license key in the same write — the app
       // activates that key in the same transaction that creates this doc.
@@ -146,15 +152,23 @@ service cloud.firestore {
             )
           )
         );
-      allow delete: if isAuthed() &&
-        get(/databases/$(database)/documents/cards/$(cardId)).data.ownerId == userId();
+      // Sidious can delete any card - used by the admin panel's "delete
+      // card" control. The card doc itself is only half the data though;
+      // the admin app also walks and deletes every subcollection below
+      // (members/roles/channels/operations/brevity/units/events) plus the
+      // matching medical/{cardId}/patients docs, since Firestore never
+      // cascade-deletes subcollections on its own.
+      allow delete: if isOwnerAdmin() ||
+        ( isAuthed() &&
+          get(/databases/$(database)/documents/cards/$(cardId)).data.ownerId == userId()
+        );
 
       // -- Members --
       match /members/{memberId} {
         // Members can read the whole roster; anyone can read their OWN
         // prospective member doc (needed for the "am I already a member?"
         // check that runs before joinCard creates that doc).
-        allow read:   if isCardMember(cardId) || memberId == userId();
+        allow read:   if isCardMember(cardId) || memberId == userId() || isOwnerAdmin();
 
         // Self-join. Only the very first member of a not-yet-existing card
         // (the card-creation transaction in doCreateCard) may create
@@ -187,33 +201,33 @@ service cloud.firestore {
             request.resource.data.canEditBrevity == resource.data.canEditBrevity &&
             request.resource.data.canMultiChan == resource.data.canMultiChan
           );
-        allow delete: if isCardAdmin(cardId) || memberId == userId(); // admin or self-leave
+        allow delete: if isCardAdmin(cardId) || memberId == userId() || isOwnerAdmin(); // admin, self-leave, or Sidious (card deletion)
       }
 
       // -- Roles --
       match /roles/{roleId} {
-        allow read:   if isCardMember(cardId);
-        allow write:  if isCardAdmin(cardId);
+        allow read:   if isCardMember(cardId) || isOwnerAdmin();
+        allow write:  if isCardAdmin(cardId) || isOwnerAdmin();
       }
 
       // -- Channels --
       match /channels/{chanId} {
-        allow read:   if isCardMember(cardId);
-        allow write:  if isCardAdmin(cardId);
+        allow read:   if isCardMember(cardId) || isOwnerAdmin();
+        allow write:  if isCardAdmin(cardId) || isOwnerAdmin();
       }
 
       // -- Operations --
       match /operations/{opId} {
-        allow read:   if isCardMember(cardId);
+        allow read:   if isCardMember(cardId) || isOwnerAdmin();
         // Only members with canCreateOps permission (or admin) can write
-        allow write:  if isCardAdmin(cardId) ||
+        allow write:  if isCardAdmin(cardId) || isOwnerAdmin() ||
           (isCardMember(cardId) && getMember(cardId).canCreateOps == true);
       }
 
       // -- Brevity codes --
       match /brevity/{codeId} {
-        allow read:   if isCardMember(cardId);
-        allow write:  if isCardAdmin(cardId) ||
+        allow read:   if isCardMember(cardId) || isOwnerAdmin();
+        allow write:  if isCardAdmin(cardId) || isOwnerAdmin() ||
           (isCardMember(cardId) && getMember(cardId).canEditBrevity == true);
       }
 
@@ -222,33 +236,38 @@ service cloud.firestore {
       // default-deny behavior that meant unit creation was silently rejected
       // for every user, regardless of role.
       match /units/{unitId} {
-        allow read:   if isCardMember(cardId);
-        allow write:  if isCardAdmin(cardId);
+        allow read:   if isCardMember(cardId) || isOwnerAdmin();
+        allow write:  if isCardAdmin(cardId) || isOwnerAdmin();
       }
 
       // -- Events (activity/audit log) --
       // Append-only: any member can log an event about their OWN action
       // (going down, being revived, treating someone, starting/archiving an
       // op) but can never attribute an event to someone else, and nothing
-      // is ever editable or deletable once written — it's a log, not state.
+      // is ever editable once written — it's a log, not state. Sidious can
+      // delete (only as part of a full card deletion), but never update.
       match /events/{eventId} {
-        allow read:   if isCardMember(cardId);
+        allow read:   if isCardMember(cardId) || isOwnerAdmin();
         allow create: if isCardMember(cardId) && request.resource.data.actorUid == userId();
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isOwnerAdmin();
       }
     }
 
     // -- Medical records --
     // cardId scoped - each card has its own medical board
     match /medical/{cardId}/patients/{patientId} {
-      // Any card member can read medical data
-      allow read: if isCardMember(cardId);
+      // Any card member (or Sidious) can read medical data
+      allow read: if isCardMember(cardId) || isOwnerAdmin();
 
       // Players can update their OWN medical record
       allow write: if isCardMember(cardId) && patientId == userId();
 
       // Medics can update ANY patient's record in their card
       allow write: if isMedic(cardId);
+
+      // Sidious - only ever exercised as part of a full card deletion
+      allow write: if isOwnerAdmin();
     }
 
     // -- Joint Ops (cross-faction coordination) --
