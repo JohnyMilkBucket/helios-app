@@ -200,19 +200,6 @@ html.popout-mode #content{padding:10px 12px}
 .unit-row:hover{background:rgba(91,139,181,.1)}
 .sub-row{font-size:11px;padding:3px 0 3px 4px;color:#a8b8cc;cursor:pointer;-webkit-app-region:no-drag}
 .sub-row:hover{color:#cdd9e8}
-/* 9L drawer */
-#drawer-9l{
-  position:fixed;top:34px;right:0;bottom:0;width:min(100%,400px);
-  background:rgba(10,20,38,.97);backdrop-filter:blur(18px);
-  border-left:2px solid var(--red);z-index:60;display:none;flex-direction:column;
-}
-#btn-9l{
-  position:absolute;right:12px;bottom:12px;z-index:10;
-  width:54px;height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  border:2px solid var(--red);background:rgba(239,68,68,.13);cursor:pointer;
-  color:var(--redsoft);box-shadow:0 0 20px rgba(239,68,68,.28);backdrop-filter:blur(10px);
-  -webkit-app-region:no-drag;
-}
 /* Settings sections */
 .settings-section{margin-bottom:22px}
 .settings-section h3{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.3em;color:var(--accent);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
@@ -1163,12 +1150,6 @@ html.popout-mode #content{padding:10px 12px}
           </div>
         </div>
 
-        <!-- 9-LINE BUTTON -->
-        <button id="btn-9l" onclick="open9L()">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <div class="orb" style="font-size:8px;letter-spacing:.12em;margin-top:4px">9-LINE</div>
-          <div style="font-size:7px;color:var(--accent);margin-top:1px">CALLOUT</div>
-        </button>
       </div>
     </div>
 
@@ -1198,38 +1179,6 @@ html.popout-mode #content{padding:10px 12px}
       <div style="border-top:1px solid var(--border);flex-shrink:0">
         <div style="padding:7px 10px;font-size:9px;letter-spacing:.2em;color:var(--accent)">ON ACTIVE NET</div>
         <div style="max-height:160px;overflow-y:auto" class="scroll" id="chan-members-list"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 9-LINE DRAWER -->
-<div id="drawer-9l">
-  <div style="padding:14px 16px;border-bottom:1px solid rgba(239,68,68,.35);display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
-    <div>
-      <div style="font-size:9px;letter-spacing:.3em;color:var(--red)">CASEVAC CALLOUT CARD</div>
-      <div class="orb" style="font-size:15px;font-weight:700;margin-top:2px">9-LINE MEDEVAC</div>
-    </div>
-    <button onclick="close9L()" style="background:none;border:none;color:var(--redsoft);cursor:pointer;padding:5px;-webkit-app-region:no-drag">✕</button>
-  </div>
-  <div style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:7px" class="scroll">
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L1 — PICKUP LOCATION</div><div style="font-size:11px;color:#cdd9e8">Grid coordinates (e.g. 38S MB 234 567)</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L2 — FREQ / CALLSIGN</div><div style="font-size:11px;color:#cdd9e8">Frequency in MHz + callsign of requesting unit</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L3 — PRECEDENCE</div><div style="font-size:11px;color:#cdd9e8">A — URGENT · B — URGENT-SURG · C — PRIORITY · D — ROUTINE · E — CONVENIENCE</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L4 — SPECIAL EQUIPMENT</div><div style="font-size:11px;color:#cdd9e8">A — NONE · B — HOIST · C — EXTRACTION · D — VENTILATOR</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L5 — PATIENT TYPE</div><div style="font-size:11px;color:#cdd9e8">L — # LITTER · A — # AMBULATORY</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L6 — SECURITY AT PZ</div><div style="font-size:11px;color:#cdd9e8">N — NO ENEMY · P — POSSIBLE · E — ENEMY IN AREA · X — ARMED ESCORT REQ</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L7 — METHOD OF MARKING</div><div style="font-size:11px;color:#cdd9e8">A — PANELS · B — PYRO · C — SMOKE · D — NONE · E — OTHER</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L8 — NATIONALITY</div><div style="font-size:11px;color:#cdd9e8">A — US MIL · B — US CIV · C — NON-US MIL · D — NON-US CIV · E — EPW</div></div>
-    <div style="border:1px solid rgba(239,68,68,.22);background:rgba(16,26,46,.6);padding:10px 12px"><div style="font-size:9px;font-weight:700;color:var(--red);font-family:'Orbitron',sans-serif;margin-bottom:4px">L9 — NBC CONTAMINATION</div><div style="font-size:11px;color:#cdd9e8">N — NUCLEAR · B — BIOLOGICAL · C — CHEMICAL · NONE if clean</div></div>
-    <div style="border:1px solid rgba(91,139,181,.28);background:rgba(91,139,181,.05);padding:12px">
-      <div style="font-size:9px;letter-spacing:.2em;color:var(--hi);margin-bottom:6px">SAMPLE CALL</div>
-      <div style="font-size:11px;color:#a8b8cc;line-height:1.7">
-        <span style="color:var(--amber)">"DUSTOFF DUSTOFF — this is [CALLSIGN], 9-line follows, over."</span><br>
-        L1: [GRID] · L2: [FREQ / CALLSIGN]<br>
-        L3: [PRECEDENCE] · L4: [EQUIP] · L5: [#L #A]<br>
-        L6: [SECURITY] · L7: [MARKING] · L8: [NAT]<br>
-        <span style="color:var(--amber)">L9: [NBC]. How copy, over.</span>
       </div>
     </div>
   </div>
@@ -1441,6 +1390,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.11', items:[
+    'Removed the 9-Line CASEVAC callout drawer/button from Comms.',
+  ]},
   { v:'1.4.10', items:[
     'Added a RULES tab (desktop + mobile) — your faction\'s own SOP, written by admins, visible to everyone.',
     'Suspended accounts are now stopped at login with an appeal message instead of reaching the app.',
@@ -4119,8 +4071,6 @@ function updateCardSettingsUI() {
 // ════════════════════════════════════════════════════════════════════════════
 // MISC
 // ════════════════════════════════════════════════════════════════════════════
-window.open9L  = () => { $('drawer-9l').style.display='flex' }
-window.close9L = () => { $('drawer-9l').style.display='none' }
 window.showGuide = () => { $('guide-modal').style.display='flex' }
 window.showInviteCode = showInviteCode
 
@@ -4128,7 +4078,6 @@ window.showInviteCode = showInviteCode
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     if($('treat-modal').style.display!=='none'&&!S.applying) closeTreat()
-    if($('drawer-9l').style.display!=='none') close9L()
     closePatientCard()
   }
 })

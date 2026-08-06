@@ -3,6 +3,9 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.11
+- Removed the 9-Line CASEVAC callout drawer/button from the Comms tab.
+
 ## v1.4.10
 - Added a RULES tab (desktop + mobile) — your faction's own SOP text,
   written and edited by admins, visible to every member. Separate from the
