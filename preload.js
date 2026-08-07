@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('helios', {
   closePopout:      (panel)  => ipcRenderer.send('close-popout', panel),
   onPopoutClosed:   (cb)     => ipcRenderer.on('popout-closed', (_e, panel) => cb(panel)),
 
+  // Clipboard
+  copyText:         (text)    => ipcRenderer.send('copy-text', text),
+
   // Auto-update
   checkForUpdates:  ()       => ipcRenderer.send('check-for-updates'),
   quitAndInstall:   ()       => ipcRenderer.send('quit-and-install'),

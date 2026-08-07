@@ -3,6 +3,11 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.14
+- Fixed the mobile companion COPY LINK button doing nothing — it now
+  copies via Electron's clipboard directly instead of the browser
+  Clipboard API, which was failing silently in this window.
+
 ## v1.4.13
 - Added a COPY LINK button next to the mobile companion URL in Settings —
   the app disables text selection globally, so that link couldn't be

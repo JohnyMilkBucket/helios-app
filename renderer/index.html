@@ -1393,6 +1393,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.14', items:[
+    'Fixed the COPY LINK button (Mobile Companion in Settings) doing nothing — now copies via Electron directly instead of the browser Clipboard API, which was failing silently.',
+  ]},
   { v:'1.4.13', items:[
     'Added a COPY LINK button next to the mobile companion URL in Settings so it can actually be copied (the app disables text selection globally).',
   ]},
@@ -4096,15 +4099,18 @@ window.showGuide = () => { $('guide-modal').style.display='flex' }
 
 // The body has user-select:none (see the global stylesheet), so the mobile
 // companion URL in Settings can't just be highlighted and copied by hand —
-// needs an explicit copy button.
+// needs an explicit copy button. Goes through the main process's clipboard
+// module (window.helios.copyText) rather than navigator.clipboard.writeText
+// directly - the web Clipboard API depends on document focus and a
+// clipboard-write permission grant that this frameless window doesn't
+// reliably have, and fails completely silently when it doesn't.
 window.copyWebAppLink = () => {
-  navigator.clipboard.writeText('https://helios-app-c803f.web.app').then(() => {
-    const btn = $('copy-webapp-link-btn')
-    if(!btn) return
-    const prev = btn.textContent
-    btn.textContent = 'COPIED'
-    setTimeout(() => { btn.textContent = prev }, 1500)
-  }).catch(()=>{})
+  window.helios?.copyText('https://helios-app-c803f.web.app')
+  const btn = $('copy-webapp-link-btn')
+  if(!btn) return
+  const prev = btn.textContent
+  btn.textContent = 'COPIED'
+  setTimeout(() => { btn.textContent = prev }, 1500)
 }
 window.showInviteCode = showInviteCode
 

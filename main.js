@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, session } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, session, clipboard } = require('electron')
 const path = require('path')
 const { autoUpdater } = require('electron-updater')
 
@@ -219,6 +219,15 @@ ipcMain.handle('open-popout', (e, panel) => {
 ipcMain.on('close-popout', (e, panel) => {
   popouts[panel]?.close()
 })
+
+// ── CLIPBOARD ─────────────────────────────────────────────────────────────────
+// Electron's clipboard module writes directly to the OS clipboard - unlike
+// the renderer's navigator.clipboard.writeText(), it doesn't depend on the
+// page having focus or a clipboard-write permission grant, both of which
+// are easy to end up without in a frameless webSecurity:true window and
+// fail completely silently (the promise just never resolves/rejects
+// visibly to the user).
+ipcMain.on('copy-text', (e, text) => clipboard.writeText(text))
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 ipcMain.on('check-for-updates', () => checkForUpdates())
