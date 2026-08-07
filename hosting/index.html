@@ -145,7 +145,8 @@ button{font-family:inherit;cursor:pointer}
     <div class="notice">
       Creating a new card requires a license key — do that from the desktop app.
     </div>
-    <button class="btn" style="width:100%;margin-top:12px;color:var(--redsoft)" onclick="doLogout()">LOG OUT</button>
+    <button id="cancel-switch-btn" class="btn hidden" style="width:100%;margin-top:12px" onclick="cancelSwitchCard()">‹ BACK</button>
+    <button class="btn" style="width:100%;margin-top:8px;color:var(--redsoft)" onclick="doLogout()">LOG OUT</button>
   </div>
 </div>
 
@@ -159,6 +160,7 @@ button{font-family:inherit;cursor:pointer}
     <div style="display:flex;gap:6px">
       <button class="btn btn-amber" id="alerts-btn" onclick="enableAlerts()" style="font-size:9px;padding:8px 10px">ENABLE ALERTS</button>
       <button class="btn btn-blue hidden" id="install-btn" onclick="doInstall()" style="font-size:9px;padding:8px 10px">INSTALL APP</button>
+      <button class="btn" onclick="showSwitchCard()" style="font-size:9px;padding:8px 10px">⇄ SWITCH</button>
       <button class="btn" onclick="doLogout()" style="font-size:9px;padding:8px 10px">LOGOUT</button>
     </div>
   </div>
@@ -320,12 +322,50 @@ window.doJoinCard = async () => {
     enterCard(cardId)
   } catch(e) { setErr('join-err', e.message) }
 }
-function renderCardsList() {
+async function renderCardsList() {
   const ids = S.profile?.cardIds||[]
   if(!ids.length) { $('cards-list').innerHTML = '<div class="notice">No cards yet — join one below with an invite code from your faction leader.</div>'; return }
-  $('cards-list').innerHTML = ids.map(id=>`<button class="btn" style="width:100%;margin-bottom:8px;text-align:left" onclick="enterCardFromList('${id}')">&rarr; ${id}</button>`).join('')
+  const cards = []
+  for (const id of ids) {
+    try {
+      const snap = await getDoc(doc(db,'cards',id))
+      if(snap.exists()) cards.push({ id, ...snap.data() })
+    } catch(e) { /* card may have been deleted — skip */ }
+  }
+  if(!cards.length) { $('cards-list').innerHTML = '<div class="notice">No cards yet — join one below with an invite code from your faction leader.</div>'; return }
+  $('cards-list').innerHTML = cards.map(c => `
+    <button class="btn" style="width:100%;margin-bottom:8px;text-align:left;display:flex;justify-content:space-between;align-items:center" onclick="enterCardFromList('${c.id}')">
+      <span>${c.name||'UNNAMED CARD'}</span>
+      ${c.id===S.cardId ? '<span style="font-size:9px;color:var(--green)">CURRENT</span>' : '<span style="font-size:9px;color:var(--accent)">SWITCH &rsaquo;</span>'}
+    </button>
+  `).join('')
 }
-window.enterCardFromList = (id) => enterCard(id)
+// Both the initial post-login card pick and switching mid-session from an
+// already-active card go through here - cleanupListeners() is a no-op if
+// nothing's subscribed yet (first login), and required if something is
+// (switching), so it's simplest to always run it rather than have two
+// entry points that can drift out of sync.
+window.enterCardFromList = (id) => { cleanupListeners(); enterCard(id) }
+
+// Opens the card-selection screen from inside the app (without logging
+// out) so the user can pick a different card. Mirrors the desktop app's
+// SWITCH CARD flow.
+window.showSwitchCard = async () => {
+  const returnTo = S.cardId
+  cleanupListeners()
+  show('screen-cards')
+  await renderCardsList()
+  const cancelBtn = $('cancel-switch-btn')
+  if(cancelBtn) {
+    cancelBtn.classList.toggle('hidden', !returnTo)
+    cancelBtn.dataset.returnTo = returnTo || ''
+  }
+}
+// Misclicked SWITCH? Go straight back into the card they were already on.
+window.cancelSwitchCard = () => {
+  const returnTo = $('cancel-switch-btn')?.dataset.returnTo
+  if(returnTo) enterCard(returnTo)
+}
 
 // ── ENTER CARD ────────────────────────────────────────────────────────────
 async function enterCard(cardId) {

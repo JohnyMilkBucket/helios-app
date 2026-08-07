@@ -3,6 +3,11 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.15
+- Mobile companion now has a SWITCH CARD button (top bar) — lets you pick
+  a different card without logging out, same as desktop. The card list
+  also now shows real card names (with a CURRENT badge) instead of raw IDs.
+
 ## v1.4.14
 - Fixed the mobile companion COPY LINK button doing nothing — it now
   copies via Electron's clipboard directly instead of the browser
