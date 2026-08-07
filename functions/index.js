@@ -16,12 +16,99 @@
 // the cost of the extra network hop through FCM.
 
 const { onDocumentWritten } = require('firebase-functions/v2/firestore')
+const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { initializeApp } = require('firebase-admin/app')
 const { getFirestore, FieldValue } = require('firebase-admin/firestore')
 const { getMessaging } = require('firebase-admin/messaging')
 
 initializeApp()
 const db = getFirestore()
+
+const EMPTY_LD = { bandage: 0, tourniquet: 0, splint: 0, stim: 0, depressant: 0, blood: 0 }
+
+// Card creation and license renewal used to run as a client-side Firestore
+// transaction (see the old doCreateCard/doRenewLicense in renderer/index.html):
+// check the key's activated flag, flip it, and write the card, all in one
+// client transaction. The problem: Firestore security rules can only check
+// "is this key currently unactivated?" as a *precondition* on the cards
+// write - they have no way to require that the matching write to
+// licenseKeys/{code} happens in the same commit. A client that writes
+// straight to `cards` (or `cards` update for renewal) while skipping the
+// licenseKeys write entirely still passes rules, and the key is left
+// looking untouched - fully valid for a second card to legitimately claim
+// later via the real path. That's how the same key ended up on two cards.
+//
+// Moving both operations here closes it for real: the Admin SDK bypasses
+// security rules entirely, so this is the only privileged place a key can
+// ever be activated, and the corresponding Firestore rules (cards create,
+// cards update's license-renewal branch, licenseKeys update) were tightened
+// to remove the client-writable paths these functions replace - a client
+// can no longer activate a key or attach one to a card by any direct write,
+// licensed or not, only through here.
+async function activateKeyAndGetExpiry(tx, keyRef, cardId, cardName) {
+  const keySnap = await tx.get(keyRef)
+  if (!keySnap.exists) throw new HttpsError('not-found', 'Invalid license key')
+  if (keySnap.data().activated) throw new HttpsError('already-exists', 'Already activated, please contact Owner or contact the developer.')
+  const licenseExpiresAt = Date.now() + keySnap.data().durationDays * 24 * 60 * 60 * 1000
+  tx.update(keyRef, { activated: true, activatedAt: FieldValue.serverTimestamp(), expiresAt: licenseExpiresAt, cardId, cardName })
+  return licenseExpiresAt
+}
+
+exports.createCardWithKey = onCall(async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) throw new HttpsError('unauthenticated', 'Must be signed in.')
+  const name = String(request.data?.name || '').trim()
+  const keyCode = String(request.data?.keyCode || '').trim().toUpperCase()
+  if (!name) throw new HttpsError('invalid-argument', 'Enter a faction name')
+  if (!keyCode) throw new HttpsError('invalid-argument', 'Enter a license key')
+
+  const userSnap = await db.doc(`users/${uid}`).get()
+  const username = userSnap.data()?.username || userSnap.data()?.callsign || 'UNKNOWN OPERATIVE'
+
+  const cardRef = db.collection('cards').doc()
+  const keyRef = db.doc(`licenseKeys/${keyCode}`)
+  const memberRef = db.doc(`cards/${cardRef.id}/members/${uid}`)
+
+  await db.runTransaction(async (tx) => {
+    const licenseExpiresAt = await activateKeyAndGetExpiry(tx, keyRef, cardRef.id, name)
+    tx.set(cardRef, { name, ownerId: uid, createdAt: FieldValue.serverTimestamp(), licenseKeyCode: keyCode, licenseExpiresAt })
+    tx.set(memberRef, {
+      username, uid, role: 'OWNER', color: '#fbbf24',
+      isAdmin: true, canTreatOthers: true, canCreateOps: true, canEditBrevity: true, canMultiChan: true,
+      online: true, joinedAt: FieldValue.serverTimestamp(), ld: { ...EMPTY_LD },
+    })
+  })
+
+  return { cardId: cardRef.id }
+})
+
+exports.renewCardLicense = onCall(async (request) => {
+  const uid = request.auth?.uid
+  if (!uid) throw new HttpsError('unauthenticated', 'Must be signed in.')
+  const cardId = String(request.data?.cardId || '').trim()
+  const keyCode = String(request.data?.keyCode || '').trim().toUpperCase()
+  if (!cardId) throw new HttpsError('invalid-argument', 'Missing cardId')
+  if (!keyCode) throw new HttpsError('invalid-argument', 'Enter a license key')
+
+  const cardRef = db.doc(`cards/${cardId}`)
+  const memberSnap = await db.doc(`cards/${cardId}/members/${uid}`).get()
+  const member = memberSnap.data()
+  if (!member || !(member.isAdmin || member.role === 'OWNER')) {
+    throw new HttpsError('permission-denied', 'Only card admins can renew the license.')
+  }
+
+  const cardSnap = await cardRef.get()
+  if (!cardSnap.exists) throw new HttpsError('not-found', 'Card not found')
+  const keyRef = db.doc(`licenseKeys/${keyCode}`)
+
+  let licenseExpiresAt
+  await db.runTransaction(async (tx) => {
+    licenseExpiresAt = await activateKeyAndGetExpiry(tx, keyRef, cardId, cardSnap.data().name || '')
+    tx.update(cardRef, { licenseKeyCode: keyCode, licenseExpiresAt })
+  })
+
+  return { licenseExpiresAt }
+})
 
 const DEATH_LABEL = { headshot: 'HEAD TRAUMA', bleed_out: 'BLED OUT', cardiac_arrest: 'CARDIAC ARREST' }
 

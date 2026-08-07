@@ -1345,6 +1345,8 @@ import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, ge
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 import { getDatabase, ref as dbRef, set as dbSet, push as dbPush, remove as dbRemove, onValue, onChildAdded, off }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js'
+import { getFunctions, httpsCallable }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js'
 
 // ── VOICE (WebRTC mesh, signaled over Realtime Database) ──────────────────
 import { initVoice, setRtdb, leaveAllChannels as voiceLeaveAll }
@@ -1375,6 +1377,7 @@ const firebaseApp = initializeApp(FIREBASE_CONFIG)
 const auth = getAuth(firebaseApp)
 const db   = getFirestore(firebaseApp)
 const rtdb = getDatabase(firebaseApp)
+const fns  = getFunctions(firebaseApp)
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────
 const EMAIL_DOMAIN = '@helios.internal'
@@ -1393,6 +1396,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.16', items:[
+    'Fixed a license key reuse bug — card creation/renewal now goes through the backend instead of the client, so a key can never end up on two cards.',
+  ]},
   { v:'1.4.15', items:[
     'Mobile companion now has a SWITCH CARD button — pick a different card without logging out. Card list also shows real names now instead of raw IDs.',
   ]},
@@ -1760,42 +1766,34 @@ window.doCreateCard = async () => {
   if(!bypass && !keyCode) return setErr('create-card-err','Enter a license key')
 
   try {
-    // Pre-allocate the card's ID so it can be referenced from inside the
-    // transaction (addDoc's auto-ID isn't available until after the write).
-    const cardRef = doc(collection(db,'cards'))
-    const cardId = cardRef.id
-    const memberRef = doc(db,'cards',cardId,'members',S.user.uid)
-    const keyRef = bypass ? null : doc(db,'licenseKeys',keyCode)
+    let cardId
 
-    // Card creation + key activation happen in ONE atomic transaction so a
-    // key can never be spent twice under concurrent attempts, and the card
-    // never ends up created without its key actually being marked used.
-    await runTransaction(db, async (tx) => {
-      let licenseExpiresAt = null
-
-      if(!bypass) {
-        const keySnap = await tx.get(keyRef)
-        if(!keySnap.exists()) throw new Error('Invalid license key')
-        if(keySnap.data().activated) throw new Error('Already activated, please contact Owner or contact the developer.')
-        licenseExpiresAt = Date.now() + keySnap.data().durationDays*24*60*60*1000
-        tx.update(keyRef, {
-          activated:true, activatedAt:serverTimestamp(),
-          expiresAt:licenseExpiresAt, cardId, cardName:name
+    if(bypass) {
+      // Pre-allocate the card's ID so it can be referenced from inside the
+      // transaction (addDoc's auto-ID isn't available until after the write).
+      const cardRef = doc(collection(db,'cards'))
+      cardId = cardRef.id
+      const memberRef = doc(db,'cards',cardId,'members',S.user.uid)
+      await runTransaction(db, async (tx) => {
+        tx.set(cardRef, { name, ownerId:S.user.uid, createdAt:serverTimestamp() })
+        tx.set(memberRef, {
+          username:S.profile.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OWNER', color:'#fbbf24',
+          isAdmin:true, canTreatOthers:true, canCreateOps:true, canEditBrevity:true,
+          canMultiChan:true, online:true, joinedAt:serverTimestamp(),
+          ld:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
         })
-      }
-
-      const cardData = { name, ownerId:S.user.uid, createdAt:serverTimestamp() }
-      if(!bypass) { cardData.licenseKeyCode = keyCode; cardData.licenseExpiresAt = licenseExpiresAt }
-      tx.set(cardRef, cardData)
-
-      // Join as owner
-      tx.set(memberRef, {
-        username:S.profile.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OWNER', color:'#fbbf24',
-        isAdmin:true, canTreatOthers:true, canCreateOps:true, canEditBrevity:true,
-        canMultiChan:true, online:true, joinedAt:serverTimestamp(),
-        ld:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
       })
-    })
+    } else {
+      // Card creation + key activation happen together server-side (Cloud
+      // Function, Admin SDK) — a client transaction can't actually enforce
+      // that spending a key and creating a card happen atomically, since
+      // Firestore rules can only check the key's state as a precondition,
+      // not require a matching write to licenseKeys/{code} in the same
+      // commit. A direct client write that skipped the key update would
+      // still pass rules, leaving the key looking unused and reusable.
+      const res = await httpsCallable(fns,'createCardWithKey')({ name, keyCode })
+      cardId = res.data.cardId
+    }
 
     // Claim a globally-unique invite code now that we're a member of the card
     const code = await claimInviteCode(cardId)
@@ -1805,7 +1803,7 @@ window.doCreateCard = async () => {
     await addCardToProfile(cardId)
     sfx('success')
     enterCard(cardId)
-  } catch(e) { setErr('create-card-err',e.message); sfx('error') }
+  } catch(e) { setErr('create-card-err',e.message||e.details||'Failed to create card'); sfx('error') }
 }
 
 window.doRenewLicense = async () => {
@@ -1813,29 +1811,15 @@ window.doRenewLicense = async () => {
   if(!keyCode) return setErr('renew-key-err','Enter a license key')
   const cardId = S.cardId
   try {
-    const cardRef = doc(db,'cards',cardId)
-    const keyRef = doc(db,'licenseKeys',keyCode)
-
-    // Same atomic pattern as create: activating the key and updating the
-    // card's expiry happen in one transaction so a key can never be spent
-    // twice, and the card is never left updated without the key marked used.
-    await runTransaction(db, async (tx) => {
-      const keySnap = await tx.get(keyRef)
-      if(!keySnap.exists()) throw new Error('Invalid license key')
-      if(keySnap.data().activated) throw new Error('Already activated, please contact Owner or contact the developer.')
-      const licenseExpiresAt = Date.now() + keySnap.data().durationDays*24*60*60*1000
-      tx.update(keyRef, {
-        activated:true, activatedAt:serverTimestamp(),
-        expiresAt:licenseExpiresAt, cardId, cardName:S.card?.name||''
-      })
-      tx.update(cardRef, { licenseKeyCode:keyCode, licenseExpiresAt })
-    })
-
+    // Same reasoning as doCreateCard: key activation + the card's expiry
+    // update happen together server-side (Cloud Function, Admin SDK) so a
+    // client can't skip the licenseKeys write and leave the key reusable.
+    await httpsCallable(fns,'renewCardLicense')({ cardId, keyCode })
     sfx('success')
     $('renew-key-inp').value = ''
     // The card doc's onSnapshot listener (still running while locked) will
     // pick up the new licenseExpiresAt and unlock the app automatically.
-  } catch(e) { setErr('renew-key-err',e.message); sfx('error') }
+  } catch(e) { setErr('renew-key-err',e.message||e.details||'Failed to renew'); sfx('error') }
 }
 
 window.doJoinCard = async () => {

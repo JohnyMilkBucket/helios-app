@@ -52,17 +52,6 @@ service cloud.firestore {
       return isAuthed() && userId() == 'J4lApBTvLba6hU5ZXqb0PqIyWqp1';
     }
 
-    // True if `expiresAt` is a plausible expiry for a license key with the
-    // given duration, activated right around now. Ties the client-supplied
-    // timestamp to the server's own clock (request.time) and the key's real
-    // durationDays, so it can't be set to an arbitrary huge value — the only
-    // room to maneuver is the +/-5min tolerance for clock skew and the time
-    // the transaction takes to commit.
-    function isPlausibleExpiry(expiresAt, durationDays) {
-      let expected = request.time.toMillis() + durationDays * 24 * 60 * 60 * 1000;
-      return expiresAt >= expected - 300000 && expiresAt <= expected + 300000;
-    }
-
     // -- Users --
     // Each user can read/write their own profile. Sidious can also write any
     // user's profile - needed to set/clear the banned flag from the admin
@@ -97,17 +86,16 @@ service cloud.firestore {
       allow list: if isOwnerAdmin();
       allow create: if isOwnerAdmin();
       allow delete: if isOwnerAdmin();
-      // A regular user may "spend" a key exactly once — flipping
-      // activated false -> true — but cannot touch tier/duration/price,
-      // and cannot flip it back or re-activate an already-used key.
-      allow update: if isOwnerAdmin() ||
-        ( isAuthed() &&
-          resource.data.activated == false &&
-          request.resource.data.activated == true &&
-          request.resource.data.tier == resource.data.tier &&
-          request.resource.data.durationDays == resource.data.durationDays &&
-          request.resource.data.priceUSD == resource.data.priceUSD
-        );
+      // Activation (flipping activated false -> true) happens ONLY through
+      // the createCardWithKey / renewCardLicense Cloud Functions now (Admin
+      // SDK, bypasses these rules entirely) - never via a direct client
+      // write. Rules can only check a key's CURRENT state as a precondition
+      // on some other document's write, they can't require that activating
+      // the key and creating/renewing the card happen in the same commit -
+      // a client could previously write a card directly while skipping the
+      // licenseKeys write, leaving the key looking untouched and reusable.
+      // Closing client write access here is what actually closes that hole.
+      allow update: if isOwnerAdmin();
     }
 
     // -- Cards (faction workspaces) --
@@ -116,42 +104,20 @@ service cloud.firestore {
       // cards" table in the separate admin key-generator app, and lets that
       // same account read every subcollection below when deleting a card.
       allow read:  if isCardMember(cardId) || isOwnerAdmin();
-      // Sidious can always create a card. Everyone else must reference a
-      // real, not-yet-activated license key in the same write — the app
-      // activates that key in the same transaction that creates this doc.
-      // licenseExpiresAt must also be a plausible expiry actually derived
-      // from that key's real durationDays (see isPlausibleExpiry) — without
-      // this check the field is just a client-supplied number and anyone
-      // could hand themselves a card that "expires" in the year 3000.
-      allow create: if isOwnerAdmin() ||
-        ( isAuthed() &&
-          request.resource.data.ownerId == userId() &&
-          exists(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)) &&
-          get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.activated == false &&
-          isPlausibleExpiry(
-            request.resource.data.licenseExpiresAt,
-            get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.durationDays
-          )
-        );
-      // Renewing an existing card's license also goes through here. Any
-      // card admin can update non-license fields freely (rename, invite
-      // code, etc). But if licenseKeyCode or licenseExpiresAt are part of
-      // the change, it must be a genuine renewal: a real, not-yet-activated
-      // key whose durationDays actually justifies the new expiry — closes
-      // the hole where an admin could just set their own card's
-      // licenseExpiresAt to anything via a direct updateDoc call.
+      // Sidious can create a card directly (no key needed). Everyone else
+      // creates a licensed card through the createCardWithKey Cloud
+      // Function (Admin SDK) instead of a direct client write - see the
+      // licenseKeys update rule above for why. A licensed card can never be
+      // created by a direct client write now, full stop.
+      allow create: if isOwnerAdmin();
+      // Any card admin can update non-license fields freely (rename, invite
+      // code, rules text, etc). licenseKeyCode/licenseExpiresAt can only
+      // change through the renewCardLicense Cloud Function (Admin SDK) -
+      // a direct client write can never touch either field, so this branch
+      // only ever passes when they're left exactly as they already were.
       allow update: if isCardAdmin(cardId) &&
-        ( ( request.resource.data.licenseExpiresAt == resource.data.licenseExpiresAt &&
-            request.resource.data.licenseKeyCode == resource.data.licenseKeyCode )
-          ||
-          ( exists(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)) &&
-            get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.activated == false &&
-            isPlausibleExpiry(
-              request.resource.data.licenseExpiresAt,
-              get(/databases/$(database)/documents/licenseKeys/$(request.resource.data.licenseKeyCode)).data.durationDays
-            )
-          )
-        );
+        request.resource.data.licenseExpiresAt == resource.data.licenseExpiresAt &&
+        request.resource.data.licenseKeyCode == resource.data.licenseKeyCode;
       // Sidious can delete any card - used by the admin panel's "delete
       // card" control. The card doc itself is only half the data though;
       // the admin app also walks and deletes every subcollection below

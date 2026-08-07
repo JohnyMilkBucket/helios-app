@@ -3,6 +3,12 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.16
+- Fixed a license key reuse bug — card creation and license renewal now go
+  through a server-side Cloud Function instead of a client transaction, so
+  a key can never be attached to more than one card. (Rules/backend fix,
+  already live — this release just ships the matching client code.)
+
 ## v1.4.15
 - Mobile companion now has a SWITCH CARD button (top bar) — lets you pick
   a different card without logging out, same as desktop. The card list
