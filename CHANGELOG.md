@@ -3,6 +3,11 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.12
+- Archived operations can now be permanently deleted (admin/canCreateOps
+  only). An operation has to be archived first, so an active roster can
+  never be deleted by mistake.
+
 ## v1.4.11
 - Removed the 9-Line CASEVAC callout drawer/button from the Comms tab.
 

@@ -1390,6 +1390,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.12', items:[
+    'Archived operations can now be permanently deleted (admin/canCreateOps only) — an op has to be archived first, so an active roster can never be deleted by mistake.',
+  ]},
   { v:'1.4.11', items:[
     'Removed the 9-Line CASEVAC callout drawer/button from Comms.',
   ]},
@@ -2661,6 +2664,7 @@ function renderOps() {
         </div>
         ${S.member?.isAdmin||S.member?.canCreateOps ? `
           <button class="btn" onclick="archiveOp('${op.id}')" style="font-size:9px;padding:4px 8px;flex-shrink:0;display:${op.status==='active'?'block':'none'}">ARCHIVE</button>
+          <button class="btn" onclick="deleteOp('${op.id}')" style="font-size:9px;padding:4px 8px;flex-shrink:0;color:var(--redsoft);border-color:rgba(239,68,68,.3);display:${op.status==='archived'?'block':'none'}">DELETE</button>
         ` : ''}
       </div>
     </div>
@@ -2741,6 +2745,17 @@ window.archiveOp = async (id) => {
   const op = S.ops.find(o=>o.id===id)
   await updateDoc(doc(db,'cards',S.cardId,'operations',id),{ status:'archived' })
   logCardEvent('op_archive', { opId:id, detail:op?.name||'' })
+}
+
+// Only ever offered on already-archived ops (see renderOps) — an active
+// op has to be archived first, so this can never be used to accidentally
+// wipe a roster that's still in play.
+window.deleteOp = (id) => {
+  const op = S.ops.find(o=>o.id===id)
+  confirmInlineModal('Delete Operation?', `This permanently deletes <b style="color:#fff">${op?.name||'this operation'}</b> and its roster. Casualty history stays in the event log, but will no longer show a linked operation. This cannot be undone.`, true, async () => {
+    await deleteDoc(doc(db,'cards',S.cardId,'operations',id))
+    logCardEvent('op_delete', { opId:id, detail:op?.name||'' })
+  })
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4640,6 +4655,7 @@ function describeEvent(e) {
     }
     case 'op_start':   return `${e.actorName} started operation "${e.detail}"`
     case 'op_archive': return `${e.actorName} archived operation "${e.detail}"`
+    case 'op_delete':  return `${e.actorName} deleted operation "${e.detail}"`
     default: return `${e.actorName} — ${e.type}`
   }
 }
