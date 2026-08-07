@@ -331,6 +331,20 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
   const patient = isSelf ? null : M.patients.find(p=>p.id===patientId)
   const targetObj = isSelf ? M.self : patient
 
+  // A multi-second treatment (bandage, TQ, stim...) can outlast the patient
+  // still being a valid target - they could get revived, cleared stable, or
+  // drop off this window's own patients listener while the timer runs. That
+  // used to fall through every branch below as a silent no-op: nothing ever
+  // got written to Firestore, but the inventory decrement a few lines down
+  // still ran and the UI still played its "treatment done" success sound -
+  // indistinguishable from working. Failing loudly here lets the caller's
+  // existing sync-error handling (see finishApply in index.html) actually
+  // tell the medic it didn't take, instead of a silent, inventory-wasting
+  // ghost treatment.
+  if(!isSelf && !patient) {
+    throw new Error('That patient is no longer on the casualty board — treatment not applied.')
+  }
+
   if(treatment==='bandage') {
     const zs = targetObj?.zones?.[zone]
     applyBandageToZone(zs)

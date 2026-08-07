@@ -337,6 +337,13 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
   const patient = isSelf ? null : M.patients.find(p=>p.id===patientId)
   const targetObj = isSelf ? M.self : patient
 
+  // See renderer/js/medical.js for why this check exists — a stale/missing
+  // patient used to fall through every branch below as a silent no-op that
+  // still consumed inventory and played the success sound.
+  if(!isSelf && !patient) {
+    throw new Error('That patient is no longer on the casualty board — treatment not applied.')
+  }
+
   if(treatment==='bandage') {
     const zs = targetObj?.zones?.[zone]
     applyBandageToZone(zs)

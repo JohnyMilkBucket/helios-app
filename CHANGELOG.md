@@ -3,6 +3,13 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.17
+- Fixed treating another patient sometimes silently doing nothing (most
+  noticeable in the Medical pop-out window) — a stale/out-of-sync patient
+  reference would let the treatment "complete" (sound played, supply
+  consumed) without ever actually writing to the patient's record. Now it
+  fails loudly with a real error instead of pretending it worked.
+
 ## v1.4.16
 - Fixed a license key reuse bug — card creation and license renewal now go
   through a server-side Cloud Function instead of a client transaction, so

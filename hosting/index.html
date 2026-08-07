@@ -614,7 +614,15 @@ function getTreatTargetObj() {
   return treatTarget.target==='self' ? S.self : Medical.getPatients().find(p=>p.id===treatTarget.patientId)
 }
 async function doTreat(zone, treatment) {
-  await Medical.applyTreatment({ zone, treatment, target:treatTarget.target, patientId:treatTarget.patientId })
+  try {
+    await Medical.applyTreatment({ zone, treatment, target:treatTarget.target, patientId:treatTarget.patientId })
+  } catch(e) {
+    // Was previously an unhandled rejection - the button did nothing
+    // visible and the sheet just silently never updated. At least surface
+    // it now instead of it looking like a dead button.
+    alert(e.message || 'Treatment failed to save — try again.')
+    return
+  }
   renderTreatSheet()
   renderMedicalView()
 }

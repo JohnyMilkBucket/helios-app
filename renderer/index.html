@@ -1396,6 +1396,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.17', items:[
+    'Fixed treating another patient sometimes silently doing nothing (most noticeable in the Medical pop-out) — it now fails loudly with a real error instead of consuming a supply and pretending it worked.',
+  ]},
   { v:'1.4.16', items:[
     'Fixed a license key reuse bug — card creation/renewal now goes through the backend instead of the client, so a key can never end up on two cards.',
   ]},
