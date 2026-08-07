@@ -3,6 +3,11 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.13
+- Added a COPY LINK button next to the mobile companion URL in Settings —
+  the app disables text selection globally, so that link couldn't be
+  copied by hand before.
+
 ## v1.4.12
 - Archived operations can now be permanently deleted (admin/canCreateOps
   only). An operation has to be archived first, so an active roster can

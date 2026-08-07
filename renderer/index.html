@@ -935,7 +935,10 @@ html.popout-mode #content{padding:10px 12px}
             <div class="panel" style="padding:15px">
               <div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:12px">MOBILE COMPANION</div>
               <div style="font-size:11px;color:#a8b8cc;margin-bottom:10px">Check the roster, active/past ops, casualties, ORBAT, roles, joint ops, and treat patients from a phone — same account and card, installable as an app.</div>
-              <div class="orb" style="font-size:13px;font-weight:700;color:var(--hi)">helios-app-c803f.web.app</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="orb" style="font-size:13px;font-weight:700;color:var(--hi)">helios-app-c803f.web.app</div>
+                <button class="btn" id="copy-webapp-link-btn" onclick="copyWebAppLink()" style="font-size:9px;padding:4px 8px">COPY LINK</button>
+              </div>
               <div style="font-size:10px;color:var(--accent);margin-top:8px">Comms and admin tools are desktop-only for now.</div>
             </div>
 
@@ -1390,6 +1393,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.13', items:[
+    'Added a COPY LINK button next to the mobile companion URL in Settings so it can actually be copied (the app disables text selection globally).',
+  ]},
   { v:'1.4.12', items:[
     'Archived operations can now be permanently deleted (admin/canCreateOps only) — an op has to be archived first, so an active roster can never be deleted by mistake.',
   ]},
@@ -4087,6 +4093,19 @@ function updateCardSettingsUI() {
 // MISC
 // ════════════════════════════════════════════════════════════════════════════
 window.showGuide = () => { $('guide-modal').style.display='flex' }
+
+// The body has user-select:none (see the global stylesheet), so the mobile
+// companion URL in Settings can't just be highlighted and copied by hand —
+// needs an explicit copy button.
+window.copyWebAppLink = () => {
+  navigator.clipboard.writeText('https://helios-app-c803f.web.app').then(() => {
+    const btn = $('copy-webapp-link-btn')
+    if(!btn) return
+    const prev = btn.textContent
+    btn.textContent = 'COPIED'
+    setTimeout(() => { btn.textContent = prev }, 1500)
+  }).catch(()=>{})
+}
 window.showInviteCode = showInviteCode
 
 // Enter key bindings
