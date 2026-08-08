@@ -300,11 +300,22 @@ export function initMedical(db, cardId, uid, hooks) {
     // Never include your own record here — "patients" is the medic's view
     // of OTHER downed people. Your own casualty state lives in getSelf() and
     // is shown/treated only through MY STATUS.
-    M.patients = snap.docs.filter(d=>d.id!==uid).map(d=>({id:d.id,...d.data()}))
+    //
+    // Also require down or dead. A casualty doc can now exist for someone
+    // who isn't actually down (e.g. self-testing a stim, or preemptively
+    // wrapping a tourniquet on an uninjured limb before ever going down -
+    // see applyTreatment's create-on-missing-doc path) - without this
+    // filter they'd show up in every medic's PATIENTS list as if they
+    // needed treatment right now, which they don't. Dead stays included
+    // even if down was never true (e.g. a fatal stim overdose while
+    // testing, not from an actual injury) - a dead player still needs to
+    // be revivable/visible regardless of how they got there.
+    const allDown = snap.docs.filter(d=>d.data().down || d.data().dead)
+    M.patients = allDown.filter(d=>d.id!==uid).map(d=>({id:d.id,...d.data()}))
     hooks.onPatientsChange?.(M.patients, {
       prevCount,
       newCasualty: M.patients.length > prevCount && prevCount >= 0,
-      totalIncludingSelf: snap.docs.length,
+      totalIncludingSelf: allDown.length,
     })
   })
 
@@ -428,8 +439,28 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
 
   await runTransaction(M.db, async (tx) => {
     const snap = await tx.get(ref)
-    if(!snap.exists()) throw new Error('That patient is no longer on the casualty board — treatment not applied.')
-    const data = snap.data()
+    // A patient's doc only ever exists because they're already on the
+    // casualty board (via markDown) - if it's gone, they've been revived
+    // or cleared out from under this treatment, same as before.
+    //
+    // Self is different: nothing stops a player from preemptively wrapping
+    // a tourniquet on an uninjured limb, or testing a stim, before ever
+    // having gone down - there's no rule requiring an injury (or `down`)
+    // first, and the UI's own body map is clickable regardless of down
+    // state. That used to mean self-treatment before ever going down had
+    // no doc to update() and threw ("treatment failed to save") - and even
+    // when it happened to succeed, the resulting TQ never ticked toward
+    // numbness/limb loss because the tickers gated on `down` (see
+    // startMedicalTickers below). Both are fixed together: create the doc
+    // here if it's missing, with `down` left false, and the tickers now
+    // key off the actual per-zone/overdose state instead of `down`.
+    if(!snap.exists() && !isSelf) {
+      throw new Error('That patient is no longer on the casualty board — treatment not applied.')
+    }
+    const data = snap.exists() ? snap.data() : {
+      username: M.actorName, uid: M.uid, down:false, uncon:false, dead:false,
+      deathCause:null, zones:{}, bloodPct:100, hr:78, overdosing:false, odStacks:0,
+    }
     fieldChanges = {}
 
     if(ZONE_TREATMENTS.has(treatment)) {
@@ -448,11 +479,19 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
       fieldChanges.bloodPct = Math.min(100,(data.bloodPct||0)+40)
     }
 
-    const patch = { updatedAt: serverTimestamp() }
-    for(const [k,v] of Object.entries(fieldChanges)) {
-      patch[k==='zones' ? `zones.${zone}` : k] = k==='zones' ? v[zone] : v
+    if(snap.exists()) {
+      const patch = { updatedAt: serverTimestamp() }
+      for(const [k,v] of Object.entries(fieldChanges)) {
+        patch[k==='zones' ? `zones.${zone}` : k] = k==='zones' ? v[zone] : v
+      }
+      tx.update(ref, patch)
+    } else {
+      // Creating fresh - a real nested object, not dot-path keys (tx.set
+      // doesn't parse dots as field paths, only tx.update/updateDoc do -
+      // see this file's header comment for the exact bug that came from
+      // getting that mixed up once already).
+      tx.set(ref, { ...data, ...fieldChanges, updatedAt: serverTimestamp() })
     }
-    tx.update(ref, patch)
   })
 
   // Inventory always belongs to the ACTING player (the medic), regardless
@@ -495,7 +534,13 @@ async function syncInventoryWrite() {
 // open at once, instead of blood loss compounding with every extra hit.
 export function startMedicalTickers(hooks) {
   setInterval(async () => {
-    if(!M.cardId || !M.self.down || M.self.dead) return
+    // Deliberately NOT gated on M.self.down — a tourniquet (or chest seal)
+    // can be applied preemptively to an uninjured zone before ever going
+    // down (see applyTreatment), and it still has to tick toward numbness/
+    // failure on its own clock regardless. Gating this on `down` used to
+    // mean a TQ applied while not-down just sat there forever, no matter
+    // how long it stayed on.
+    if(!M.cardId || M.self.dead) return
     const upd = {}
     let changed = false
     for(const z of LIMBS) {
@@ -588,8 +633,11 @@ export function startMedicalTickers(hooks) {
 
   // Stim overdose ramp — HR climbs OD_CLIMB_RATE bpm/sec (faster per extra
   // stacked dose, see OD_STACK_MULT) until it crosses OD_ARREST_HR.
+  // Deliberately NOT gated on M.self.down, same reasoning as the TQ ticker
+  // above — a stim doesn't require being down first, and an overdose has to
+  // be able to climb (and kill) regardless of down state.
   setInterval(async () => {
-    if(!M.cardId || !M.self.down || M.self.dead || !M.self.overdosing) return
+    if(!M.cardId || M.self.dead || !M.self.overdosing) return
     const rate = OD_CLIMB_RATE * (1 + OD_STACK_MULT*Math.max(0,(M.self.odStacks||1)-1))
     M.self.hr = Math.min(OD_ARREST_HR, M.self.hr + rate)
     hooks.onOdTick?.(M.self)

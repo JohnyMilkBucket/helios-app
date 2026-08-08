@@ -3,6 +3,18 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.20
+- Fixed tourniquets not ticking toward numbness/limb loss when applied to
+  a zone that was never actually injured (e.g. testing/preemptively
+  applying one without going down first) — the numbness/loss clock, and
+  the stim overdose ramp, no longer require the patient to be marked
+  "down" to run.
+- Self-treatment (bandage/TQ/stim/etc.) now works even before you've ever
+  gone down — it used to fail outright since there was no casualty record
+  yet to write to.
+- A casualty record created this way doesn't show up in medics' PATIENTS
+  list unless the patient is actually down or dead.
+
 ## v1.4.19
 - Fixed "treatment failed to save" happening on stim, depressant, blood,
   and bandaging an uninjured zone — these writes always included whichever

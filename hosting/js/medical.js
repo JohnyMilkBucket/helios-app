@@ -294,11 +294,15 @@ export function initMedical(db, cardId, uid, hooks) {
     // Never include your own record here — "patients" is the medic's view
     // of OTHER downed people. Your own casualty state lives in getSelf() and
     // is shown/treated only through MY STATUS.
-    M.patients = snap.docs.filter(d=>d.id!==uid).map(d=>({id:d.id,...d.data()}))
+    //
+    // Also require down or dead — see renderer/js/medical.js for why a
+    // casualty doc can now exist for someone who isn't actually down.
+    const allDown = snap.docs.filter(d=>d.data().down || d.data().dead)
+    M.patients = allDown.filter(d=>d.id!==uid).map(d=>({id:d.id,...d.data()}))
     hooks.onPatientsChange?.(M.patients, {
       prevCount,
       newCasualty: M.patients.length > prevCount && prevCount >= 0,
-      totalIncludingSelf: snap.docs.length,
+      totalIncludingSelf: allDown.length,
     })
   })
 
@@ -389,8 +393,16 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
 
   await runTransaction(M.db, async (tx) => {
     const snap = await tx.get(ref)
-    if(!snap.exists()) throw new Error('That patient is no longer on the casualty board — treatment not applied.')
-    const data = snap.data()
+    // See renderer/js/medical.js for why self creates the doc when missing
+    // (preemptive TQ / testing a stim before ever going down) while patient
+    // still requires it to already exist.
+    if(!snap.exists() && !isSelf) {
+      throw new Error('That patient is no longer on the casualty board — treatment not applied.')
+    }
+    const data = snap.exists() ? snap.data() : {
+      username: M.actorName, uid: M.uid, down:false, uncon:false, dead:false,
+      deathCause:null, zones:{}, bloodPct:100, hr:78, overdosing:false, odStacks:0,
+    }
     fieldChanges = {}
 
     if(ZONE_TREATMENTS.has(treatment)) {
@@ -409,11 +421,17 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
       fieldChanges.bloodPct = Math.min(100,(data.bloodPct||0)+40)
     }
 
-    const patch = { updatedAt: serverTimestamp() }
-    for(const [k,v] of Object.entries(fieldChanges)) {
-      patch[k==='zones' ? `zones.${zone}` : k] = k==='zones' ? v[zone] : v
+    if(snap.exists()) {
+      const patch = { updatedAt: serverTimestamp() }
+      for(const [k,v] of Object.entries(fieldChanges)) {
+        patch[k==='zones' ? `zones.${zone}` : k] = k==='zones' ? v[zone] : v
+      }
+      tx.update(ref, patch)
+    } else {
+      // Real nested object, not dot-path keys — tx.set doesn't parse dots
+      // as field paths (only tx.update/updateDoc do).
+      tx.set(ref, { ...data, ...fieldChanges, updatedAt: serverTimestamp() })
     }
-    tx.update(ref, patch)
   })
 
   const invKey = INV_KEY[treatment]||treatment
@@ -449,7 +467,8 @@ async function syncInventoryWrite() {
 // open at once, instead of blood loss compounding with every extra hit.
 export function startMedicalTickers(hooks) {
   setInterval(async () => {
-    if(!M.cardId || !M.self.down || M.self.dead) return
+    // Deliberately NOT gated on M.self.down — see renderer/js/medical.js.
+    if(!M.cardId || M.self.dead) return
     const upd = {}
     let changed = false
     for(const z of LIMBS) {
@@ -539,8 +558,9 @@ export function startMedicalTickers(hooks) {
 
   // Stim overdose ramp — HR climbs OD_CLIMB_RATE bpm/sec (faster per extra
   // stacked dose, see OD_STACK_MULT) until it crosses OD_ARREST_HR.
+  // Deliberately NOT gated on M.self.down — see renderer/js/medical.js.
   setInterval(async () => {
-    if(!M.cardId || !M.self.down || M.self.dead || !M.self.overdosing) return
+    if(!M.cardId || M.self.dead || !M.self.overdosing) return
     const rate = OD_CLIMB_RATE * (1 + OD_STACK_MULT*Math.max(0,(M.self.odStacks||1)-1))
     M.self.hr = Math.min(OD_ARREST_HR, M.self.hr + rate)
     hooks.onOdTick?.(M.self)
