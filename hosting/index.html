@@ -547,6 +547,7 @@ function zoneStatus(zs) {
   if(zs.tq) return {text: zs.tqNumb?'TQ — NUMB':'TQ ON', color:'var(--amber)'}
   if(zs.bleeding) return {text:'BLEEDING', color:'var(--red)'}
   if(zs.fracture) return {text:'FRACTURED', color:'var(--purple)'}
+  if(zs.splinted) return {text:'(<s>FRACTURE</s>) SPLINT', color:'var(--purple)'}
   if(zs.bandaged) return {text:'BANDAGED', color:'var(--green)'}
   return {text:'CLEAR', color:'#a8b8cc'}
 }
@@ -662,6 +663,7 @@ function renderZoneTreatRow(zone, zs, inv) {
   if(Medical.LIMBS.includes(zone) && zs?.bleeding && !zs.tq) actions.push(`<button class="btn btn-amber" ${!inv.tourniquet?'disabled':''} onclick="doTreat('${zone}','tourniquet')" style="font-size:9px;padding:7px 8px">TQ</button>`)
   if(zs?.tq && !zs.limbLost) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_tourniquet')" style="font-size:9px;padding:7px 8px">REMOVE TQ</button>`)
   if(zs?.fracture) actions.push(`<button class="btn" ${!inv.splint?'disabled':''} onclick="doTreat('${zone}','splint')" style="font-size:9px;padding:7px 8px">SPLINT</button>`)
+  if(zs?.splinted) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_splint')" style="font-size:9px;padding:7px 8px">REMOVE SPLINT</button>`)
   return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[zone]}<br><span style="color:${st.color};font-size:9px">${st.text}</span></span><span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">${actions.join('')||'<span style="font-size:9px;color:var(--accent)">—</span>'}</span></div>`
 }
 

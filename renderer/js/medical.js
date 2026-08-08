@@ -47,7 +47,7 @@ export const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 export const APPLY_MS = {
   bandage_bleed:5000, bandage_frag:15000,
   tourniquet:3000, stim:3000, depressant:3000, blood:10000, remove_tourniquet:2000,
-  splint:6000,
+  splint:6000, remove_splint:2000,
 }
 export const ZONES = ['head','torso','l_arm','r_arm','l_leg','r_leg']
 // Tourniquets only make sense on limbs — never head or torso.
@@ -79,7 +79,7 @@ export const OD_STACK_MULT = 0.5
 // anyway, so there's no separate "old" copy anything else could observe.
 
 export function freshZone() {
-  return {inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,tqAppliedAt:null,tqNumb:false,limbLost:false}
+  return {inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,splinted:false,tqAppliedAt:null,tqNumb:false,limbLost:false}
 }
 
 // A wound needs as many bandage applications as its severity tier calls for
@@ -359,9 +359,15 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
     const zs = targetObj?.zones?.[zone]
     if(zs) removeTourniquetFromZone(zs)
   } else if(treatment==='splint') {
-    // Fixes the fracture flag only, doesn't touch bleeding.
-    if(targetObj?.zones?.[zone]) targetObj.zones[zone].fracture=false
+    // Fixes the fracture (so it stops restricting capability), doesn't
+    // touch bleeding. The fracture isn't discarded, just suppressed — flip
+    // splinted on so the UI can show "(FRACTURE) SPLINT" instead of losing
+    // the fact that this zone was ever fractured, and so removing the
+    // splint later knows to bring it back (see remove_splint).
+    if(targetObj?.zones?.[zone]) { targetObj.zones[zone].fracture=false; targetObj.zones[zone].splinted=true }
     M.self.inv.splint = Math.max(0,(M.self.inv.splint||0)-1)
+  } else if(treatment==='remove_splint') {
+    if(targetObj?.zones?.[zone]) { targetObj.zones[zone].fracture=true; targetObj.zones[zone].splinted=false }
   } else if(treatment==='stim') {
     if(targetObj) applyStimTo(targetObj)
     M.self.inv.stim = Math.max(0,(M.self.inv.stim||0)-1)
@@ -380,7 +386,7 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
     if(treatment==='stim' || treatment==='depressant') { upd.overdosing=M.self.overdosing; upd.odStacks=M.self.odStacks }
     if(treatment==='stim') { upd.uncon=M.self.uncon; upd.dead=M.self.dead }
     await updateDoc(doc(M.db,'medical',M.cardId,'patients',M.uid), upd)
-    if(treatment!=='remove_tourniquet') await syncInventoryWrite()
+    if(treatment!=='remove_tourniquet' && treatment!=='remove_splint') await syncInventoryWrite()
     logEvent('treatment', { targetUid:M.uid, targetName:M.actorName, treatment, zone })
     return { isSelf:true, diedFromStim: treatment==='stim' && M.self.dead, self:M.self }
   } else if(patient) {
@@ -390,7 +396,7 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
     if(treatment==='stim' || treatment==='depressant') { upd.overdosing=patient.overdosing; upd.odStacks=patient.odStacks }
     if(treatment==='stim') { upd.uncon=patient.uncon; upd.dead=patient.dead }
     await updateDoc(doc(M.db,'medical',M.cardId,'patients',patientId), upd)
-    if(treatment!=='remove_tourniquet') await syncInventoryWrite()
+    if(treatment!=='remove_tourniquet' && treatment!=='remove_splint') await syncInventoryWrite()
     logEvent('treatment', { targetUid:patientId, targetName:patient.username||patientId, treatment, zone })
     return { isSelf:false, patient }
   }

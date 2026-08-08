@@ -3,6 +3,12 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.18
+- Splinting a fracture no longer erases it — the zone now shows
+  "(FRACTURE) SPLINT" so medics can still see it was fractured. Removing
+  the splint brings the fracture back (the limb is impaired again until
+  re-splinted).
+
 ## v1.4.17
 - Fixed treating another patient sometimes silently doing nothing (most
   noticeable in the Medical pop-out window) — a stale/out-of-sync patient

@@ -1396,6 +1396,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.18', items:[
+    'Splinting a fracture no longer erases it — shows "(FRACTURE) SPLINT" instead. Removing the splint brings the fracture back.',
+  ]},
   { v:'1.4.17', items:[
     'Fixed treating another patient sometimes silently doing nothing (most noticeable in the Medical pop-out) — it now fails loudly with a real error instead of consuming a supply and pretending it worked.',
   ]},
@@ -3224,6 +3227,7 @@ function zoneColors(zones, z) {
   if(s.tq)       return {fill:'rgba(251,191,36,0.22)',stroke:'#fbbf24'}
   if(s.bleeding)  return {fill:'rgba(220,38,38,0.28)', stroke:'#dc2626'}
   if(s.fracture)  return {fill:'rgba(167,139,250,0.22)',stroke:'#a78bfa'}
+  if(s.splinted)  return {fill:'rgba(167,139,250,0.1)',stroke:'#a78bfa88'}
   const c = INJ[s.inj]?.color||'#8db3d4'
   return {fill:c+'18',stroke:c}
 }
@@ -3247,14 +3251,16 @@ function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='
     ZONES.forEach(z=>{
       const s=zones[z]; if(!s) return
       const p=ICON_POS[z]
-      let ico = s.tq ? svgTQ(13) : s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.frag ? svgFrag(13) : svgBleed(13,false)
+      let ico = s.tq ? svgTQ(13) : s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.splinted ? svgFracture(13) : s.frag ? svgFrag(13) : svgBleed(13,false)
       ig.innerHTML += `<foreignObject x="${p.x}" y="${p.y}" width="14" height="14">${ico}</foreignObject>`
       // Fracture/frag each get their own small marker too, since they'd
       // otherwise be hidden behind a bleed/TQ icon whenever combined on a zone.
-      if(s.fracture && (s.tq || s.bleeding)) {
+      // Splinted reuses the same marker as an active fracture — it's the
+      // same underlying condition, just currently controlled.
+      if((s.fracture||s.splinted) && (s.tq || s.bleeding)) {
         ig.innerHTML += `<foreignObject x="${p.x+11}" y="${p.y-4}" width="11" height="11">${svgFracture(11)}</foreignObject>`
       }
-      if(s.frag && (s.tq || s.bleeding || s.fracture)) {
+      if(s.frag && (s.tq || s.bleeding || s.fracture || s.splinted)) {
         ig.innerHTML += `<foreignObject x="${p.x-11}" y="${p.y-4}" width="11" height="11">${svgFrag(11)}</foreignObject>`
       }
       // Small persistent label right on the body map so a tourniquet reads
@@ -3307,7 +3313,7 @@ function renderOverview(zones, prefix='') {
   if(!el) return
   const injuredZones = ZONES.filter(z=>{
     const s = zones[z]
-    return s && (s.inj || s.fracture || s.tq || s.bleeding || s.limbLost)
+    return s && (s.inj || s.fracture || s.splinted || s.tq || s.bleeding || s.limbLost)
   })
   if(!injuredZones.length) {
     el.innerHTML = `<div style="font-size:11px;color:var(--green)">● NO INJURIES</div>`
@@ -3324,6 +3330,7 @@ function renderOverview(zones, prefix='') {
       if(s.tqAppliedAt && Date.now()-s.tqAppliedAt>=TQ_LOSS_MS-60000) lines.push(`<div style="font-size:10px;color:var(--red);font-weight:700">⚠ TQ time critical</div>`)
     }
     if(s.fracture) lines.push(`<div style="font-size:10px;color:#a78bfa">Fractured</div>`)
+    if(s.splinted) lines.push(`<div style="font-size:10px;color:#a78bfa">(<span style="text-decoration:line-through">Fracture</span>) Splint</div>`)
     if(s.pain)     lines.push(`<div style="font-size:10px;color:#a8b8cc">In pain</div>`)
     if(s.inj)      lines.push(`<div style="font-size:10px;color:${INJ[s.inj]?.color||'#8db3d4'}">1x ${INJ[s.inj]?.name||s.inj}</div>`)
     if(s.frag)     lines.push(`<div style="font-size:10px;color:${FRAG_INFO.color}">+ ${FRAG_INFO.name}</div>`)
@@ -3498,6 +3505,7 @@ window.openTreat = (zone, target='self') => {
     if(!s.bandaged && (s.bandagesApplied||0)>0 && s.bleeding) st+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">Wound partially packed — keep bandaging</div>`
     if(s.bandaged && s.tq) st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">Wound packed — safe to remove TQ</div>`
     if(s.fracture) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-top:4px">${svgFracture(13)}<span style="color:#a78bfa;font-weight:700">FRACTURED</span></div>`
+    if(s.splinted) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-top:4px">${svgFracture(13)}<span style="color:#a78bfa;font-weight:700">(<span style="text-decoration:line-through">FRACTURE</span>) SPLINT</span></div>`
     if(s.pain)     st+=`<div style="font-size:11px;color:#a8b8cc;margin-top:4px">In pain</div>`
   } else {
     st=`<div style="font-size:12px;color:var(--green)">● NO INJURY ON THIS ZONE</div>`
@@ -3530,7 +3538,9 @@ window.openTreat = (zone, target='self') => {
     s?.tq
       ? {id:'remove_tourniquet', label:'REMOVE TQ', color:'#fbbf24', timeSec:2, desc:s?.bandaged?'Wound is packed — safe':'⚠ Resumes bleeding — 2s', noInv:true}
       : {id:'tourniquet', label:'TOURNIQUET', color:'#fbbf24', timeSec:3, desc:isLimb?'Fast stop — 3s':'❌ LIMBS ONLY', locked:!isLimb},
-    {id:'splint', label:'SPLINT', color:'#a78bfa', timeSec:6, desc:s?.fracture?'Fix fracture — 6s':'❌ NO FRACTURE', locked:!s?.fracture},
+    s?.splinted
+      ? {id:'remove_splint', label:'REMOVE SPLINT', color:'#a78bfa', timeSec:2, desc:'⚠ Fracture returns — 2s', noInv:true}
+      : {id:'splint', label:'SPLINT', color:'#a78bfa', timeSec:6, desc:s?.fracture?'Fix fracture — 6s':'❌ NO FRACTURE', locked:!s?.fracture},
     {id:'stim',       label:'STIMULANT',  color:'#a78bfa', timeSec:3,
       desc: !patient.uncon ? (patient.overdosing ? '⚠ HR climbing — ANOTHER dose speeds it up' : '⚠ HR→200, climbs to cardiac arrest') : 'Wake patient — 3s'},
     {id:'depressant', label:'DEPRESSANT', color:'#60a5fa', timeSec:3, desc: patient.overdosing?'Clears OD — 3s':'Lower HR — 3s'},
@@ -3548,7 +3558,7 @@ window.openTreat = (zone, target='self') => {
     // still refuses to start and now explains why via blockTreatment().
     return `<button class="treat-btn" onclick="startApply('${zone}','${t.id}','${target}')"
       style="border-color:${blocked?'rgba(91,139,181,.22)':t.color};background:${isActive?t.color+'20':blocked?'transparent':t.color+'08'};color:${blocked?'var(--accent)':t.color}">
-      ${svgItemIcon(t.id==='remove_tourniquet'?'tourniquet':t.id,18,t.color)}
+      ${svgItemIcon(t.id==='remove_tourniquet'?'tourniquet':t.id==='remove_splint'?'splint':t.id,18,t.color)}
       <div class="orb" style="font-size:10px;font-weight:700;margin-top:6px;letter-spacing:.05em">${t.label}</div>
       <div style="font-size:10px;margin-top:4px;display:flex;gap:5px;align-items:center">
         <span style="color:${t.color}">${t.timeSec}s</span>
@@ -3595,7 +3605,7 @@ function blockTreatment(msg) {
 window.startApply = (zone, treatment, target) => {
   if(S.applying) { blockTreatment('Already treating — wait for it to finish or cancel it') ; return }
   if(treatment==='tourniquet'&&!LIMBS.includes(zone)) { blockTreatment('Tourniquets only go on limbs') ; return }
-  if(treatment!=='remove_tourniquet' && (S.self.inv[treatment]||0)<=0) { blockTreatment('OUT OF SUPPLY — you have none of this left') ; return }
+  if(treatment!=='remove_tourniquet' && treatment!=='remove_splint' && (S.self.inv[treatment]||0)<=0) { blockTreatment('OUT OF SUPPLY — you have none of this left') ; return }
   const targetDead = target==='patient' ? S.patients.find(p=>p.id===S.openPatientId)?.dead : S.self.dead
   if(targetDead) { blockTreatment('Deceased — no treatment applies') ; return }
 
@@ -4657,7 +4667,7 @@ async function restoreJointOp(joId) {
 // ════════════════════════════════════════════════════════════════════════════
 // ADMIN PANEL
 // ════════════════════════════════════════════════════════════════════════════
-const TREAT_LABEL = {bandage:'bandaged',tourniquet:'applied a tourniquet to',remove_tourniquet:'removed a tourniquet from',splint:'splinted',stim:'gave a stim to',depressant:'gave a depressant to',blood:'gave a blood pack to'}
+const TREAT_LABEL = {bandage:'bandaged',tourniquet:'applied a tourniquet to',remove_tourniquet:'removed a tourniquet from',splint:'splinted',remove_splint:'removed a splint from',stim:'gave a stim to',depressant:'gave a depressant to',blood:'gave a blood pack to'}
 function describeEvent(e) {
   switch(e.type) {
     case 'casualty':  return `${e.actorName} went down (${e.cause==='headshot'?'headshot':'wounded'})`
