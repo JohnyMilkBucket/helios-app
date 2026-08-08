@@ -3,6 +3,18 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.19
+- Fixed "treatment failed to save" happening on stim, depressant, blood,
+  and bandaging an uninjured zone — these writes always included whichever
+  zone's treat panel happened to be open, even when that treatment doesn't
+  touch a zone at all (systemic effects) or that zone has no injury entry.
+  Firestore rejected the resulting undefined field outright.
+- Rewrote treatment application to run inside a Firestore transaction that
+  always reads the patient's current server state immediately before
+  writing, instead of a possibly-stale local copy — two medics treating
+  the same patient (even the same zone) at the same time can no longer
+  silently clobber each other's work.
+
 ## v1.4.18
 - Splinting a fracture no longer erases it — the zone now shows
   "(FRACTURE) SPLINT" so medics can still see it was fractured. Removing

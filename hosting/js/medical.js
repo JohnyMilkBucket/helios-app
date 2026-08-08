@@ -38,7 +38,7 @@
 // documented exception to it, not a violation of it.
 
 import {
-  doc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, onSnapshot, serverTimestamp,
+  doc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, onSnapshot, serverTimestamp, runTransaction,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 
 // tier: severity 1 (minor) - 3 (severe). bleedRate: %blood lost/sec while
@@ -51,9 +51,11 @@ export const INJ = {
 export const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
 export const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 export const APPLY_MS = {
-  bandage_bleed:5000, bandage_frag:15000,
+  bandage_bleed:5000, bandage_frag:15000, unpack_bandage:4000,
   tourniquet:3000, stim:3000, depressant:3000, blood:10000, remove_tourniquet:2000,
   splint:6000, remove_splint:2000,
+  chest_seal:4000, remove_chest_seal:2000,
+  remove_frag:4000, // find_frag's duration is randomized per-attempt, see randFindFragMs()
 }
 export const ZONES = ['head','torso','l_arm','r_arm','l_leg','r_leg']
 // Tourniquets only make sense on limbs — never head or torso.
@@ -64,6 +66,13 @@ export const LIMBS = ['l_arm','r_arm','l_leg','r_leg']
 // (limb becomes unusable), TQ_LOSS_MS is the permanent-loss cutoff.
 export const TQ_WARN_MS = 4*60*1000
 export const TQ_LOSS_MS = 6*60*1000
+// Chest seals follow the exact same clock as a limb tourniquet (same
+// constants) — see renderer/js/medical.js for the full reasoning.
+export const FIND_FRAG_MIN_MS = 15000
+export const FIND_FRAG_MAX_MS = 20000
+export function randFindFragMs() {
+  return FIND_FRAG_MIN_MS + Math.random()*(FIND_FRAG_MAX_MS-FIND_FRAG_MIN_MS)
+}
 
 // Stim overdose — one dose kicks HR up to OD_START_HR and it climbs
 // OD_CLIMB_RATE bpm/sec from there (checked once per second by the ramp
@@ -85,19 +94,35 @@ export const OD_STACK_MULT = 0.5
 // anyway, so there's no separate "old" copy anything else could observe.
 
 export function freshZone() {
-  return {inj:null,frag:false,bleeding:false,tq:false,bandaged:false,bandagesApplied:0,fracture:false,splinted:false,tqAppliedAt:null,tqNumb:false,limbLost:false}
+  return {
+    inj:null, frag:false, fragFound:false, bleeding:false, pain:false,
+    tq:false, tqAppliedAt:null, tqNumb:false, limbLost:false,
+    chestSeal:false, chestSealAppliedAt:null, chestSealFailing:false,
+    bandaged:false, bandagesApplied:0,
+    fracture:false, splinted:false,
+  }
 }
 
 // A wound needs as many bandage applications as its severity tier calls for
-// (BANDAGES_NEEDED) before it's actually packed — never surfaced directly,
-// the player just keeps bandaging until it stops. Packing "counts" even
-// under a live TQ, so hitting the full count while a TQ is on still marks it
-// safe to pull.
+// (BANDAGES_NEEDED) before it's actually packed — never surfaced directly
+// as a number of "how many more," the player just keeps bandaging until it
+// stops (though bandagesApplied itself IS shown, see renderer status text).
+// Packing "counts" even under a live TQ/chest seal, so hitting the full
+// count while one's on still marks it safe to pull.
 export function applyBandageToZone(zs) {
   if(!zs) return
   zs.bandagesApplied = (zs.bandagesApplied||0)+1
   const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
   if(zs.bandagesApplied>=need) { zs.bleeding=false; zs.bandaged=true }
+}
+
+// The reverse of applyBandageToZone — see renderer/js/medical.js.
+export function unpackBandageFromZone(zs) {
+  if(!zs || !(zs.bandagesApplied>0)) return
+  zs.bandagesApplied = Math.max(0, (zs.bandagesApplied||0)-1)
+  const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
+  zs.bandaged = zs.bandagesApplied >= need
+  if(zs.inj && !zs.bandaged && !zs.tq && !zs.chestSeal) zs.bleeding = true
 }
 
 // Fresh TQ — circulation loss hasn't set in yet, so the limb stays usable
@@ -112,6 +137,15 @@ export function applyTourniquetToZone(zs) {
 // limb the moment the TQ is off.
 export function removeTourniquetFromZone(zs) {
   zs.tq=false; zs.tqAppliedAt=null; zs.tqNumb=false
+  zs.bleeding = zs.bandaged ? false : !!zs.inj
+}
+
+// Chest seal — torso-only equivalent of a tourniquet. See renderer/js/medical.js.
+export function applyChestSealToZone(zs) {
+  zs.chestSeal=true; zs.bleeding=false; zs.chestSealAppliedAt=Date.now(); zs.chestSealFailing=false
+}
+export function removeChestSealFromZone(zs) {
+  zs.chestSeal=false; zs.chestSealAppliedAt=null; zs.chestSealFailing=false
   zs.bleeding = zs.bandaged ? false : !!zs.inj
 }
 
@@ -177,10 +211,7 @@ function rollInjuries() {
     else if(wtier===2) { bleedTier = Math.random()<.25?3:2; frag = true;             fracture = Math.random()<.30 }
     else               { bleedTier = 3;                     frag = true;             fracture = true }
     const injType = bleedTier===1?'BLEED_LOW':bleedTier===2?'BLEED':'BLEED_HIGH'
-    zones[z] = {
-      inj:injType, frag, bleeding:true, tq:false, fracture, pain:true,
-      bandaged:false, bandagesApplied:0, tqAppliedAt:null, tqNumb:false, limbLost:false,
-    }
+    zones[z] = { ...freshZone(), inj:injType, frag, bleeding:true, fracture, pain:true }
   })
   // Only a severe (tier 3) bleed knocks someone out immediately — lesser
   // wounds leave you down-but-conscious, and only tip into unconsciousness
@@ -326,77 +357,80 @@ export async function clearAllPatients() {
   await Promise.all(snap.docs.map(d => deleteDoc(d.ref)))
 }
 
-// Only touch the one zone this treatment actually changed (via a real
-// updateDoc dot-path field, e.g. "zones.l_arm"), not the whole `zones` map —
-// writing the full zones object would clobber other zones whenever two
-// medics treated the same patient around the same time. Same reasoning
-// applies to bloodPct/uncon/dead/overdosing/odStacks — only included when
-// this specific treatment actually changes them.
+// See renderer/js/medical.js for the full reasoning behind everything in
+// this section — this is a straight mirror, keep the two in sync.
+const NO_INV_TREATMENTS = new Set(['remove_tourniquet','remove_splint','remove_chest_seal','unpack_bandage','find_frag','remove_frag'])
+const ZONE_TREATMENTS = new Set(['bandage','unpack_bandage','tourniquet','remove_tourniquet','chest_seal','remove_chest_seal','splint','remove_splint','find_frag','remove_frag'])
+const INV_KEY = { chest_seal: 'chestseal' }
+
+function transformZone(zs, treatment) {
+  if(treatment==='bandage') applyBandageToZone(zs)
+  else if(treatment==='unpack_bandage') unpackBandageFromZone(zs)
+  else if(treatment==='tourniquet') applyTourniquetToZone(zs)
+  else if(treatment==='remove_tourniquet') removeTourniquetFromZone(zs)
+  else if(treatment==='chest_seal') applyChestSealToZone(zs)
+  else if(treatment==='remove_chest_seal') removeChestSealFromZone(zs)
+  else if(treatment==='splint') { zs.fracture=false; zs.splinted=true }
+  else if(treatment==='remove_splint') { zs.fracture=true; zs.splinted=false }
+  else if(treatment==='find_frag') zs.fragFound=true
+  else if(treatment==='remove_frag') { zs.frag=false; zs.fragFound=false }
+}
+
 export async function applyTreatment({zone, treatment, target, patientId}) {
   const isSelf = target!=='patient'
-  const patient = isSelf ? null : M.patients.find(p=>p.id===patientId)
-  const targetObj = isSelf ? M.self : patient
+  const targetUid = isSelf ? M.uid : patientId
 
-  // See renderer/js/medical.js for why this check exists — a stale/missing
-  // patient used to fall through every branch below as a silent no-op that
-  // still consumed inventory and played the success sound.
-  if(!isSelf && !patient) {
+  if(!isSelf && !M.patients.find(p=>p.id===patientId)) {
     throw new Error('That patient is no longer on the casualty board — treatment not applied.')
   }
 
-  if(treatment==='bandage') {
-    const zs = targetObj?.zones?.[zone]
-    applyBandageToZone(zs)
-    M.self.inv.bandage = Math.max(0,(M.self.inv.bandage||0)-1)
-  } else if(treatment==='tourniquet' && LIMBS.includes(zone)) {
-    if(targetObj) {
-      if(!targetObj.zones[zone]) targetObj.zones[zone]=freshZone()
-      applyTourniquetToZone(targetObj.zones[zone])
+  const ref = doc(M.db,'medical',M.cardId,'patients',targetUid)
+  let fieldChanges = {}
+
+  await runTransaction(M.db, async (tx) => {
+    const snap = await tx.get(ref)
+    if(!snap.exists()) throw new Error('That patient is no longer on the casualty board — treatment not applied.')
+    const data = snap.data()
+    fieldChanges = {}
+
+    if(ZONE_TREATMENTS.has(treatment)) {
+      const zs = { ...freshZone(), ...(data.zones?.[zone]) }
+      transformZone(zs, treatment)
+      fieldChanges.zones = { ...data.zones, [zone]: zs }
+    } else if(treatment==='stim') {
+      const p = { hr:data.hr, uncon:data.uncon, overdosing:data.overdosing, odStacks:data.odStacks, dead:data.dead }
+      applyStimTo(p)
+      Object.assign(fieldChanges, p)
+    } else if(treatment==='depressant') {
+      const p = { hr:data.hr, overdosing:data.overdosing, odStacks:data.odStacks }
+      applyDepressantTo(p)
+      Object.assign(fieldChanges, p)
+    } else if(treatment==='blood') {
+      fieldChanges.bloodPct = Math.min(100,(data.bloodPct||0)+40)
     }
-    M.self.inv.tourniquet = Math.max(0,(M.self.inv.tourniquet||0)-1)
-  } else if(treatment==='remove_tourniquet') {
-    const zs = targetObj?.zones?.[zone]
-    if(zs) removeTourniquetFromZone(zs)
-  } else if(treatment==='splint') {
-    // Fixes the fracture (so it stops restricting capability), doesn't
-    // touch bleeding. The fracture isn't discarded, just suppressed - flip
-    // splinted on so removing it later (remove_splint) knows to bring it
-    // back, and the UI can show "(FRACTURE) SPLINT".
-    if(targetObj?.zones?.[zone]) { targetObj.zones[zone].fracture=false; targetObj.zones[zone].splinted=true }
-    M.self.inv.splint = Math.max(0,(M.self.inv.splint||0)-1)
-  } else if(treatment==='remove_splint') {
-    if(targetObj?.zones?.[zone]) { targetObj.zones[zone].fracture=true; targetObj.zones[zone].splinted=false }
-  } else if(treatment==='stim') {
-    if(targetObj) applyStimTo(targetObj)
-    M.self.inv.stim = Math.max(0,(M.self.inv.stim||0)-1)
-  } else if(treatment==='depressant') {
-    if(targetObj) applyDepressantTo(targetObj)
-    M.self.inv.depressant = Math.max(0,(M.self.inv.depressant||0)-1)
-  } else if(treatment==='blood') {
-    if(targetObj) targetObj.bloodPct = Math.min(100,(targetObj.bloodPct||0)+40)
-    M.self.inv.blood = Math.max(0,(M.self.inv.blood||0)-1)
+
+    const patch = { updatedAt: serverTimestamp() }
+    for(const [k,v] of Object.entries(fieldChanges)) {
+      patch[k==='zones' ? `zones.${zone}` : k] = k==='zones' ? v[zone] : v
+    }
+    tx.update(ref, patch)
+  })
+
+  const invKey = INV_KEY[treatment]||treatment
+  if(!NO_INV_TREATMENTS.has(treatment) && M.self.inv[invKey]!==undefined) {
+    M.self.inv[invKey] = Math.max(0,(M.self.inv[invKey]||0)-1)
+    await syncInventoryWrite()
   }
 
-  if(isSelf) {
-    const upd = { [`zones.${zone}`]: M.self.zones[zone], updatedAt:serverTimestamp() }
-    if(treatment==='blood') upd.bloodPct = M.self.bloodPct
-    if(treatment==='stim' || treatment==='depressant') upd.hr = M.self.hr
-    if(treatment==='stim' || treatment==='depressant') { upd.overdosing=M.self.overdosing; upd.odStacks=M.self.odStacks }
-    if(treatment==='stim') { upd.uncon=M.self.uncon; upd.dead=M.self.dead }
-    await updateDoc(doc(M.db,'medical',M.cardId,'patients',M.uid), upd)
-    if(treatment!=='remove_tourniquet' && treatment!=='remove_splint') await syncInventoryWrite()
-    logEvent('treatment', { targetUid:M.uid, targetName:M.actorName, treatment, zone })
-    return { isSelf:true, diedFromStim: treatment==='stim' && M.self.dead, self:M.self }
-  } else if(patient) {
-    const upd = { [`zones.${zone}`]: patient.zones[zone], updatedAt:serverTimestamp() }
-    if(treatment==='blood') upd.bloodPct = patient.bloodPct
-    if(treatment==='stim' || treatment==='depressant') upd.hr = patient.hr
-    if(treatment==='stim' || treatment==='depressant') { upd.overdosing=patient.overdosing; upd.odStacks=patient.odStacks }
-    if(treatment==='stim') { upd.uncon=patient.uncon; upd.dead=patient.dead }
-    await updateDoc(doc(M.db,'medical',M.cardId,'patients',patientId), upd)
-    if(treatment!=='remove_tourniquet' && treatment!=='remove_splint') await syncInventoryWrite()
-    logEvent('treatment', { targetUid:patientId, targetName:patient.username||patientId, treatment, zone })
-    return { isSelf:false, patient }
+  const targetLocal = isSelf ? M.self : M.patients.find(p=>p.id===patientId)
+  if(targetLocal) Object.assign(targetLocal, fieldChanges)
+
+  logEvent('treatment', { targetUid, targetName: isSelf ? M.actorName : (targetLocal?.username||patientId), treatment, zone })
+  return {
+    isSelf,
+    diedFromStim: treatment==='stim' && !!fieldChanges.dead,
+    self: isSelf ? M.self : undefined,
+    patient: isSelf ? undefined : targetLocal,
   }
 }
 
@@ -435,6 +469,23 @@ export function startMedicalTickers(hooks) {
         upd[`zones.${z}`] = s
         changed = true
         hooks.onLimbNumb?.(z)
+      }
+    }
+    // Chest seal — see renderer/js/medical.js for the full reasoning.
+    const ts = M.self.zones.torso
+    if(ts?.chestSeal && !ts.bandaged && ts.chestSealAppliedAt) {
+      const sealMs = Date.now()-ts.chestSealAppliedAt
+      if(sealMs >= TQ_LOSS_MS) {
+        ts.chestSeal = false; ts.chestSealAppliedAt = null; ts.chestSealFailing = false
+        ts.bleeding = !!ts.inj
+        upd['zones.torso'] = ts
+        changed = true
+        hooks.onChestSealFailed?.()
+      } else if(!ts.chestSealFailing && sealMs >= TQ_WARN_MS) {
+        ts.chestSealFailing = true
+        upd['zones.torso'] = ts
+        changed = true
+        hooks.onChestSealFailing?.()
       }
     }
     if(changed) {
