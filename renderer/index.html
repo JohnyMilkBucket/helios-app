@@ -1237,11 +1237,12 @@ html.popout-mode #content{padding:10px 12px}
       <div style="margin-bottom:14px;padding:10px 12px;border:1px solid rgba(91,139,181,.25);background:rgba(91,139,181,.07)">
         <div class="orb" style="font-size:10px;color:var(--hi);margin-bottom:6px;letter-spacing:.1em">TREATMENTS</div>
         <div style="font-size:11px;color:#cdd9e8;line-height:1.9">
-          🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before the bleeding actually stops — keep bandaging until it does. 5s per try, 15s if fragmentation is present.<br>
+          🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before it's fully packed — keep bandaging until it is. Even once packed, bleeding doesn't stop that instant: it keeps going a bit longer, scaled to the wound — 20s for a low velocity wound, 1 minute medium, 5 minutes high. 5s per try, 15s if fragmentation is present.<br>
           🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only, never head/torso. Stops bleeding instantly (3s to apply). It doesn't numb the limb right away — past ~4 minutes it goes numb and becomes unusable (see INCAPACITATION below, you'll get a callout when it happens), and past ~6 minutes you lose the limb entirely.<br>
           🦴 <b style="color:#a78bfa">Splint</b> — Fixes a fracture. 6s.<br>
-          ⚡ <b style="color:var(--purple)">Stimulant</b> — Safe wake-up on an unconscious patient. On a conscious patient it's an overdose: heart rate jumps to 200 and climbs about 3 bpm/sec from there — roughly 30 seconds to cardiac arrest at 280. A second dose taken while already overdosing doesn't restart the climb, it speeds it up. Only a depressant stops it. 3s.<br>
-          💧 <b style="color:var(--blue)">Depressant</b> — Normally just lowers heart rate. If the patient is currently overdosing on stims, it clears the overdose outright instead. 3s.<br>
+          💉 <b style="color:#34d399">Morphine</b> — Relieves pain on a wounded zone. Doesn't affect bleeding or anything else. 3s.<br>
+          ⚡ <b style="color:var(--purple)">Stimulant</b> — Safe wake-up on an unconscious patient. On a conscious patient it's an overdose: heart rate climbs gradually (about 3 bpm/sec) from whatever it already was toward cardiac arrest at 280. A second dose taken while already overdosing doesn't restart the climb, it speeds it up. Only a depressant stops it. 3s.<br>
+          💧 <b style="color:var(--blue)">Depressant</b> — Gradually lowers heart rate back down to normal. If the patient is currently overdosing on stims, it clears the overdose outright and brings HR back down the same way instead of an instant snap. 3s.<br>
           🩸 <b style="color:var(--red)">Blood Bag</b> — Restores 40% blood volume. 10s. Medic item.
         </div>
       </div>
@@ -1406,6 +1407,11 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.25', items:[
+    'Bandaged wounds keep bleeding for a bit after being packed (20s/1m/5m by severity) instead of stopping instantly.',
+    'New treatment: Morphine — relieves pain on a wounded zone.',
+    'Stim/depressant heart rate changes are now gradual, not an instant snap.',
+  ]},
   { v:'1.4.24', items:[
     'Fixed "BLEEDING CONTROLLED" showing on a bandaged zone that was never actually injured — now says "Was that bandage just for decoration?"',
   ]},
@@ -1662,6 +1668,9 @@ function svgStim(sz=13) {
 function svgDep(sz=13) {
   return `<svg width="${sz}" height="${sz}" viewBox="0 0 20 20"><path d="M10 19C10 19 4 12 4 7c0-3.5 2.5-6 6-6s6 2.5 6 6c0 5-6 12-6 12z" fill="#60a5fa"/></svg>`
 }
+function svgMorphine(sz=13) {
+  return `<svg width="${sz}" height="${sz}" viewBox="0 0 20 20"><rect x="2.5" y="2.5" width="15" height="15" rx="7.5" fill="none" stroke="#34d399" stroke-width="1.4"/><line x1="2.5" y1="10" x2="17.5" y2="10" stroke="#34d399" stroke-width="1.4"/><circle cx="6.5" cy="6" r="1" fill="#34d399"/></svg>`
+}
 function svgFracture(sz=13) {
   return `<svg width="${sz}" height="${sz}" viewBox="0 0 20 20"><path d="M2 10h4l2-5 3 10 2-5h5" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 }
@@ -1702,6 +1711,7 @@ function svgItemIcon(id,sz=18,color='#fff') {
   if(id==='blood')      return svgBag(sz,1)
   if(id==='splint')     return svgFracture(sz)
   if(id==='chestseal')  return svgChestSeal(sz)
+  if(id==='morphine')   return svgMorphine(sz)
   return ''
 }
 
@@ -1847,7 +1857,7 @@ window.doCreateCard = async () => {
           username:S.profile.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OWNER', color:'#fbbf24',
           isAdmin:true, canTreatOthers:true, canCreateOps:true, canEditBrevity:true,
           canMultiChan:true, online:true, joinedAt:serverTimestamp(),
-          ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
+          ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0}
         })
       })
     } else {
@@ -1906,7 +1916,7 @@ window.doJoinCard = async () => {
         username:S.profile.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OPERATOR', color:'#a8b8cc',
         isAdmin:false, canTreatOthers:false, canCreateOps:false, canEditBrevity:false,
         canMultiChan:false, online:true, joinedAt:serverTimestamp(),
-        ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
+        ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0}
       })
     }
     await addCardToProfile(cardId)
@@ -1973,7 +1983,7 @@ async function enterCard(cardId) {
   // Load user member record
   const memSnap = await getDoc(doc(db,'cards',cardId,'members',S.user.uid))
   S.member = memSnap.exists() ? memSnap.data() : {}
-  Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0})
+  Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0})
 
   // Load card doc BEFORE showing anything, so an expired license shows the
   // lock screen straight away instead of flashing the full app first.
@@ -2071,7 +2081,7 @@ function subscribeAll(cardId) {
         // mirror it straight from the member doc any time it changes,
         // regardless of down state. Only ever refilled by starting a new
         // operation, never by revive/going down.
-        Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0})
+        Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0})
         renderInventory()
       }
       // Update user strip
@@ -2739,7 +2749,7 @@ function renderOps() {
 // otherwise persists permanently (used is used, no auto-refill on revive),
 // so this is deliberately the one reset button admins have.
 async function resetRosterSupplies(members) {
-  const zero = {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
+  const zero = {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0}
   await Promise.all(members.map(m =>
     setDoc(doc(db,'cards',S.cardId,'members',m.uid||m.id), { inv:{...(m.ld||zero)} }, {merge:true})
   ))
@@ -2986,6 +2996,7 @@ function renderRoles() {
     {k:'stim',       ico:svgStim(13),                         color:'#a78bfa'},
     {k:'depressant', ico:svgDep(13),                          color:'#60a5fa'},
     {k:'blood',      ico:svgBag(13,1),                        color:'#dc2626'},
+    {k:'morphine',   ico:svgMorphine(13),                     color:'#34d399'},
   ]
 
   const allRoles = getEffectiveRoles()
@@ -2998,7 +3009,7 @@ function renderRoles() {
   const isAdmin = S.member?.isAdmin
   el.innerHTML = allRoles.map(role => {
     const memberCount = S.members.filter(m=>m.role===role.name).length
-    const ld = role.ld || {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
+    const ld = role.ld || {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0}
     const permsDisplay = [
       role.isAdmin        && 'ADMIN',
       role.canTreatOthers && 'MEDIC',
@@ -3178,6 +3189,7 @@ window.showNewRoleModal = () => {
               {k:'stim',       ico:svgStim(13),                         color:'#a78bfa'},
               {k:'depressant', ico:svgDep(13),                          color:'#60a5fa'},
               {k:'blood',      ico:svgBag(13,1),                        color:'#dc2626'},
+              {k:'morphine',   ico:svgMorphine(13),                     color:'#34d399'},
             ].map(it=>`
               <div class="ld-cell">
                 ${it.ico}
@@ -3207,7 +3219,7 @@ window.createNewRole = async () => {
     canMultiChan:   document.getElementById('nr-canMultiChan')?.checked||false,
   }
   const ld = {}
-  for(const k of ['bandage','tourniquet','chestseal','splint','stim','depressant','blood']) {
+  for(const k of ['bandage','tourniquet','chestseal','splint','stim','depressant','blood','morphine']) {
     ld[k] = Math.max(0, parseInt(document.getElementById('nr-ld-'+k)?.value)||0)
   }
   sfx('success')
@@ -3647,8 +3659,11 @@ window.openTreat = (zone, target='self') => {
         ? {id:'remove_frag', label:'REMOVE FRAG', color:'#f97316', timeSec:4, desc: woundExposed?'Pull it out — 4s':'❌ WOUND MUST BE OPEN', locked:!woundExposed, noInv:true}
         : {id:'find_frag', label:'FIND FRAG', color:'#f97316', timeSec:'15-20', desc: woundExposed?'Search takes 15-20s':'❌ WOUND MUST BE OPEN', locked:!woundExposed, noInv:true},
     ] : []),
+    {id:'morphine', label:'MORPHINE', color:'#34d399', timeSec:3,
+      desc: !s?.inj ? '❌ NOTHING TO EASE' : !s?.pain ? '✓ NO PAIN' : 'Relieves pain — 3s',
+      locked: !s?.pain},
     {id:'stim',       label:'STIMULANT',  color:'#a78bfa', timeSec:3,
-      desc: !patient.uncon ? (patient.overdosing ? '⚠ HR climbing — ANOTHER dose speeds it up' : '⚠ HR→200, climbs to cardiac arrest') : 'Wake patient — 3s'},
+      desc: !patient.uncon ? (patient.overdosing ? '⚠ HR climbing — ANOTHER dose speeds it up' : '⚠ HR climbs gradually toward cardiac arrest') : 'Wake patient — 3s'},
     {id:'depressant', label:'DEPRESSANT', color:'#60a5fa', timeSec:3, desc: patient.overdosing?'Clears OD — 3s':'Lower HR — 3s'},
     {id:'blood',      label:'BLOOD BAG',  color:'#dc2626', timeSec:10,desc:'Restore +40% — 10s'},
   ]
@@ -3848,6 +3863,7 @@ function renderInventory() {
     {id:'stim',       label:'STIM',       ico:svgStim(20),                         color:'#a78bfa', desc:'3s · ⚠ OD'},
     {id:'depressant', label:'DEPRESSANT', ico:svgDep(20),                          color:'#60a5fa', desc:'3s · slows HR'},
     {id:'blood',      label:'BLOOD BAG',  ico:svgBag(20,1),                        color:'#dc2626', desc:'10s · +40%'},
+    {id:'morphine',   label:'MORPHINE',   ico:svgMorphine(20),                     color:'#34d399', desc:'3s · pain relief'},
   ]
   if(!$('inv-display')) return
   $('inv-display').innerHTML = items.map(it=>{
@@ -3914,6 +3930,8 @@ function startTickers() {
   Medical.startMedicalTickers({
     onBloodTick: () => updateBodyFigure(),
     onTourniquetTick: () => { updateBodyFigure(); refreshOpenTreat() },
+    onBleedingControlled: () => { updateBodyFigure(); refreshOpenTreat() },
+    onHrTick: () => updateBodyFigure(),
     onLimbLost: (z) => sfx('alert'),
     onLimbNumb: (z) => { sfx('alert'); callout(`${ZONE_SPEECH[z]} unusable, tourniquet`) },
     onBleedOut: () => { sfx('alert'); Comms.silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
@@ -4796,7 +4814,7 @@ async function restoreJointOp(joId) {
 // ════════════════════════════════════════════════════════════════════════════
 // ADMIN PANEL
 // ════════════════════════════════════════════════════════════════════════════
-const TREAT_LABEL = {bandage:'bandaged',unpack_bandage:'unpacked a bandage from',tourniquet:'applied a tourniquet to',remove_tourniquet:'removed a tourniquet from',chest_seal:'applied a chest seal to',remove_chest_seal:'removed a chest seal from',splint:'splinted',remove_splint:'removed a splint from',find_frag:'searched for fragmentation on',remove_frag:'removed fragmentation from',stim:'gave a stim to',depressant:'gave a depressant to',blood:'gave a blood pack to'}
+const TREAT_LABEL = {bandage:'bandaged',unpack_bandage:'unpacked a bandage from',tourniquet:'applied a tourniquet to',remove_tourniquet:'removed a tourniquet from',chest_seal:'applied a chest seal to',remove_chest_seal:'removed a chest seal from',splint:'splinted',remove_splint:'removed a splint from',find_frag:'searched for fragmentation on',remove_frag:'removed fragmentation from',stim:'gave a stim to',depressant:'gave a depressant to',blood:'gave a blood pack to',morphine:'gave morphine to'}
 function describeEvent(e) {
   switch(e.type) {
     case 'casualty':  return `${e.actorName} went down (${e.cause==='headshot'?'headshot':'wounded'})`

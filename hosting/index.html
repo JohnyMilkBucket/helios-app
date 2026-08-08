@@ -313,7 +313,7 @@ window.doJoinCard = async () => {
         username:S.profile.username||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OPERATOR', color:'#a8b8cc',
         isAdmin:false, canTreatOthers:false, canCreateOps:false, canEditBrevity:false,
         canMultiChan:false, online:true, joinedAt:serverTimestamp(),
-        ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
+        ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0}
       })
     }
     const cardIds = [...new Set([...(S.profile.cardIds||[]), cardId])]
@@ -396,6 +396,8 @@ async function enterCard(cardId) {
   Medical.syncInventory(S.member.inv||{})
   Medical.startMedicalTickers({
     onTourniquetTick: () => renderMedicalView(),
+    onBleedingControlled: () => renderMedicalView(),
+    onHrTick: () => renderMedicalView(),
     onBloodTick: () => renderMedicalView(),
     onOdTick: () => renderMedicalView(),
     onBleedOut: () => renderMedicalView(),
@@ -584,7 +586,7 @@ function renderMedicalView() {
     </div>
     <div class="panel">
       <div class="label">SUPPLIES</div>
-      <div>${['bandage','tourniquet','chestseal','splint','stim','depressant','blood'].map(k=>`<span class="inv-chip">${k.toUpperCase()}: ${inv[k]||0}</span>`).join('')}</div>
+      <div>${['bandage','tourniquet','chestseal','splint','stim','depressant','blood','morphine'].map(k=>`<span class="inv-chip">${k.toUpperCase()}: ${inv[k]||0}</span>`).join('')}</div>
     </div>
     ${canTreatOthers ? `
     <div class="panel">
@@ -675,6 +677,7 @@ function renderZoneTreatRow(zone, zs, inv) {
   if(zs?.splinted) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_splint')" style="font-size:9px;padding:7px 8px">REMOVE SPLINT</button>`)
   if(zs?.frag && !zs.fragFound) actions.push(`<button class="btn" ${!woundExposed?'disabled':''} onclick="doTreat('${zone}','find_frag')" style="font-size:9px;padding:7px 8px" title="${woundExposed?'15-20s search':'Wound must be open first'}">FIND FRAG</button>`)
   if(zs?.fragFound) actions.push(`<button class="btn" ${!woundExposed?'disabled':''} onclick="doTreat('${zone}','remove_frag')" style="font-size:9px;padding:7px 8px" title="${woundExposed?'':'Wound must be open first'}">REMOVE FRAG</button>`)
+  if(zs?.pain) actions.push(`<button class="btn" ${!inv.morphine?'disabled':''} onclick="doTreat('${zone}','morphine')" style="font-size:9px;padding:7px 8px;background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.45);color:#34d399">MORPHINE</button>`)
   return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[zone]}<br><span style="color:${st.color};font-size:9px">${st.text}</span></span><span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">${actions.join('')||'<span style="font-size:9px;color:var(--accent)">—</span>'}</span></div>`
 }
 

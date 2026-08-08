@@ -3,6 +3,17 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.25
+- Bandaging a wound no longer stops the bleeding the instant it's packed —
+  it keeps bleeding at its normal rate for a bit longer, scaled to the
+  wound: 20s for a low velocity wound, 1 minute medium, 5 minutes high.
+- New treatment: Morphine — relieves pain on a wounded zone. 3s, costs a
+  morphine item (new role loadout slot, defaults to 0).
+- Stim and depressant heart rate changes are now gradual instead of an
+  instant snap — a stim's overdose climb starts from whatever HR the
+  patient already had (not a jump to 200), and a depressant settles HR
+  down toward normal over a few seconds instead of teleporting it there.
+
 ## v1.4.24
 - Fixed "BLEEDING CONTROLLED" (and the bleed icon) showing on a zone that
   was bandaged but never actually had a real injury — it now reads "Was

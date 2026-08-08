@@ -23,7 +23,7 @@ import {
   doc, setDoc, deleteDoc, addDoc, collection,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 
-export const DEFAULT_LD = {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
+export const DEFAULT_LD = {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0,morphine:0}
 export const PERM_KEYS = ['isAdmin','canTreatOthers','canCreateOps','canEditBrevity','canMultiChan']
 
 // Pure — takes data rather than reading global state, so it's testable and

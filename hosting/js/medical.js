@@ -49,6 +49,8 @@ export const INJ = {
   BLEED_HIGH: { name:'High Velocity Wound',   color:'#991b1b', tier:3, bleedRate:2 },
 }
 export const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
+// See renderer/js/medical.js — packing doesn't stop bleeding instantly.
+export const BLEED_STOP_MS = {1:20000, 2:60000, 3:5*60*1000}
 export const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 export const APPLY_MS = {
   bandage_bleed:5000, bandage_frag:15000, unpack_bandage:4000,
@@ -56,6 +58,7 @@ export const APPLY_MS = {
   splint:6000, remove_splint:2000,
   chest_seal:4000, remove_chest_seal:2000,
   remove_frag:4000, // find_frag's duration is randomized per-attempt, see randFindFragMs()
+  morphine:3000,
 }
 export const ZONES = ['head','torso','l_arm','r_arm','l_leg','r_leg']
 // Tourniquets only make sense on limbs — never head or torso.
@@ -86,6 +89,8 @@ export const OD_START_HR = 200
 export const OD_ARREST_HR = 280
 export const OD_CLIMB_RATE = 3
 export const OD_STACK_MULT = 0.5
+// See renderer/js/medical.js — depressant/stim settle hr gradually via hrTarget.
+export const HR_SETTLE_RATE = 4
 
 // ── PURE TRANSITION FUNCTIONS ────────────────────────────────────────────
 // These mutate the zone/target object passed in (matching the original
@@ -98,7 +103,7 @@ export function freshZone() {
     inj:null, frag:false, fragFound:false, bleeding:false, pain:false,
     tq:false, tqAppliedAt:null, tqNumb:false, limbLost:false,
     chestSeal:false, chestSealAppliedAt:null, chestSealFailing:false,
-    bandaged:false, bandagesApplied:0,
+    bandaged:false, bandagesApplied:0, bleedStopAt:null,
     fracture:false, splinted:false,
   }
 }
@@ -112,8 +117,15 @@ export function freshZone() {
 export function applyBandageToZone(zs) {
   if(!zs) return
   zs.bandagesApplied = (zs.bandagesApplied||0)+1
-  const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
-  if(zs.bandagesApplied>=need) { zs.bleeding=false; zs.bandaged=true }
+  const tier = INJ[zs.inj]?.tier
+  const need = BANDAGES_NEEDED[tier] || 1
+  if(zs.bandagesApplied>=need) {
+    zs.bandaged = true
+    // See renderer/js/medical.js — fully packed doesn't mean bleeding stops
+    // that instant, see BLEED_STOP_MS.
+    if(zs.inj) zs.bleedStopAt = Date.now() + (BLEED_STOP_MS[tier]||BLEED_STOP_MS[1])
+    else zs.bleeding = false
+  }
 }
 
 // The reverse of applyBandageToZone — see renderer/js/medical.js.
@@ -122,6 +134,7 @@ export function unpackBandageFromZone(zs) {
   zs.bandagesApplied = Math.max(0, (zs.bandagesApplied||0)-1)
   const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
   zs.bandaged = zs.bandagesApplied >= need
+  if(!zs.bandaged) zs.bleedStopAt = null
   if(zs.inj && !zs.bandaged && !zs.tq && !zs.chestSeal) zs.bleeding = true
 }
 
@@ -158,19 +171,20 @@ export function removeChestSealFromZone(zs) {
 // the ticker uses to climb faster.
 export function applyStimTo(obj) {
   if(obj.uncon) {
-    obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95
+    obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95; obj.hrTarget=null
   } else {
     obj.odStacks=(obj.odStacks||0)+1
-    if(!obj.overdosing) obj.hr=OD_START_HR
     obj.overdosing=true
+    obj.hrTarget=null // the OD ramp ticker owns hr now, climbing from wherever it already sits
   }
 }
 
 // Clears an active overdose outright (that's the point of countering a stim
-// with a depressant) — otherwise it's just a normal HR-lowering aid.
+// with a depressant) — otherwise it's just a normal HR-lowering aid. See
+// renderer/js/medical.js — settles gradually via hrTarget, not an instant snap.
 export function applyDepressantTo(obj) {
-  if(obj.overdosing) { obj.hr=78; obj.overdosing=false; obj.odStacks=0 }
-  else obj.hr=55
+  if(obj.overdosing) { obj.overdosing=false; obj.odStacks=0; obj.hrTarget=78 }
+  else obj.hrTarget=55
 }
 
 // A tourniquet doesn't numb the limb the instant it's on — it takes a few
@@ -229,7 +243,7 @@ function rollInjuries() {
 // derived list, not a single record) — index.html re-syncs its own
 // `S.patients` reference via the onPatientsChange hook each time.
 const M = {
-  self: { down:false, uncon:false, dead:false, deathCause:null, zones:{}, bloodPct:100, hr:78, overdosing:false, odStacks:0, inv:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0} },
+  self: { down:false, uncon:false, dead:false, deathCause:null, zones:{}, bloodPct:100, hr:78, hrTarget:null, overdosing:false, odStacks:0, inv:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0,morphine:0} },
   patients: [],
   db:null, cardId:null, uid:null,
   listeners: [],
@@ -274,6 +288,7 @@ export function initMedical(db, cardId, uid, hooks) {
       M.self.deathCause = d.deathCause ?? null
       M.self.overdosing = d.overdosing ?? false
       M.self.odStacks   = d.odStacks   ?? 0
+      M.self.hrTarget   = d.hrTarget   ?? null
       // NOTE: inv deliberately not read here — inventory is a persistent
       // per-member resource now (see syncInventory), independent of this
       // casualty doc's lifecycle. It used to live here and silently reset
@@ -284,7 +299,7 @@ export function initMedical(db, cardId, uid, hooks) {
       if(!wasDead && M.self.dead) hooks.onSelfDied?.()
     } else {
       M.self.down=false; M.self.uncon=false; M.self.dead=false; M.self.deathCause=null; M.self.zones={}; M.self.bloodPct=100
-      M.self.overdosing=false; M.self.odStacks=0
+      M.self.overdosing=false; M.self.odStacks=0; M.self.hrTarget=null
     }
     hooks.onSelfChange?.(M.self)
   })
@@ -330,11 +345,11 @@ export async function markDown(username) {
   M.self.zones = zones
   M.self.bloodPct = 100; M.self.down = true; M.self.uncon = startUncon; M.self.dead = headHit
   M.self.deathCause = headHit ? 'headshot' : null
-  M.self.overdosing = false; M.self.odStacks = 0
+  M.self.overdosing = false; M.self.odStacks = 0; M.self.hrTarget = null
   if(headHit) M.self.hr = 0
   await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid), {
     username, uid: M.uid,
-    zones: M.self.zones, bloodPct: M.self.bloodPct, overdosing:false, odStacks:0,
+    zones: M.self.zones, bloodPct: M.self.bloodPct, overdosing:false, odStacks:0, hrTarget:null,
     down:true, uncon:startUncon, dead:headHit, deathCause:M.self.deathCause, ...(headHit?{hr:0}:{}),
     downdAt: Date.now(), updatedAt: serverTimestamp(),
   })
@@ -344,7 +359,7 @@ export async function markDown(username) {
 
 export async function revive() {
   M.self.down=false; M.self.uncon=false; M.self.dead=false; M.self.deathCause=null; M.self.zones={}; M.self.bloodPct=100
-  M.self.overdosing=false; M.self.odStacks=0; M.self.hr=78
+  M.self.overdosing=false; M.self.odStacks=0; M.self.hr=78; M.self.hrTarget=null
   await deleteDoc(doc(M.db,'medical',M.cardId,'patients',M.uid))
   logEvent('revive', { targetUid:M.uid, targetName:M.actorName })
 }
@@ -364,7 +379,7 @@ export async function clearAllPatients() {
 // See renderer/js/medical.js for the full reasoning behind everything in
 // this section — this is a straight mirror, keep the two in sync.
 const NO_INV_TREATMENTS = new Set(['remove_tourniquet','remove_splint','remove_chest_seal','unpack_bandage','find_frag','remove_frag'])
-const ZONE_TREATMENTS = new Set(['bandage','unpack_bandage','tourniquet','remove_tourniquet','chest_seal','remove_chest_seal','splint','remove_splint','find_frag','remove_frag'])
+const ZONE_TREATMENTS = new Set(['bandage','unpack_bandage','tourniquet','remove_tourniquet','chest_seal','remove_chest_seal','splint','remove_splint','find_frag','remove_frag','morphine'])
 const INV_KEY = { chest_seal: 'chestseal' }
 
 function transformZone(zs, treatment) {
@@ -378,6 +393,7 @@ function transformZone(zs, treatment) {
   else if(treatment==='remove_splint') { zs.fracture=true; zs.splinted=false }
   else if(treatment==='find_frag') zs.fragFound=true
   else if(treatment==='remove_frag') { zs.frag=false; zs.fragFound=false }
+  else if(treatment==='morphine') zs.pain=false
 }
 
 export async function applyTreatment({zone, treatment, target, patientId}) {
@@ -401,7 +417,7 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
     }
     const data = snap.exists() ? snap.data() : {
       username: M.actorName, uid: M.uid, down:false, uncon:false, dead:false,
-      deathCause:null, zones:{}, bloodPct:100, hr:78, overdosing:false, odStacks:0,
+      deathCause:null, zones:{}, bloodPct:100, hr:78, hrTarget:null, overdosing:false, odStacks:0,
     }
     fieldChanges = {}
 
@@ -410,11 +426,11 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
       transformZone(zs, treatment)
       fieldChanges.zones = { ...data.zones, [zone]: zs }
     } else if(treatment==='stim') {
-      const p = { hr:data.hr, uncon:data.uncon, overdosing:data.overdosing, odStacks:data.odStacks, dead:data.dead }
+      const p = { hr:data.hr, hrTarget:data.hrTarget??null, uncon:data.uncon, overdosing:data.overdosing, odStacks:data.odStacks, dead:data.dead }
       applyStimTo(p)
       Object.assign(fieldChanges, p)
     } else if(treatment==='depressant') {
-      const p = { hr:data.hr, overdosing:data.overdosing, odStacks:data.odStacks }
+      const p = { hr:data.hr, hrTarget:data.hrTarget??null, overdosing:data.overdosing, odStacks:data.odStacks }
       applyDepressantTo(p)
       Object.assign(fieldChanges, p)
     } else if(treatment==='blood') {
@@ -495,10 +511,10 @@ export function startMedicalTickers(hooks) {
     if(ts?.chestSeal && !ts.bandaged && ts.chestSealAppliedAt) {
       const sealMs = Date.now()-ts.chestSealAppliedAt
       if(sealMs >= TQ_LOSS_MS) {
-        M.self.dead = true; M.self.deathCause = 'chest_seal_failure'; M.self.uncon = true; M.self.hr = 0
+        M.self.dead = true; M.self.deathCause = 'chest_seal_failure'; M.self.uncon = true; M.self.hr = 0; M.self.hrTarget = null
         hooks.onChestSealDeath?.()
         await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
-          dead:true, deathCause:'chest_seal_failure', uncon:true, hr:0, updatedAt:serverTimestamp()
+          dead:true, deathCause:'chest_seal_failure', uncon:true, hr:0, hrTarget:null, updatedAt:serverTimestamp()
         },{merge:true})
         return
       } else if(!ts.chestSealFailing && sealMs >= TQ_WARN_MS) {
@@ -519,6 +535,26 @@ export function startMedicalTickers(hooks) {
 
   setInterval(async () => {
     if(!M.cardId || !M.self.down || M.self.dead) return
+
+    // See renderer/js/medical.js — bandaged wounds keep bleeding for a bit
+    // before BLEED_STOP_MS actually turns it off.
+    const stopUpd = {}
+    let stopChanged = false
+    for(const z of ZONES) {
+      const s = M.self.zones[z]
+      if(s?.bandaged && s.bleeding && s.bleedStopAt && Date.now()>=s.bleedStopAt) {
+        s.bleeding = false
+        s.bleedStopAt = null
+        stopUpd[`zones.${z}`] = s
+        stopChanged = true
+      }
+    }
+    if(stopChanged) {
+      hooks.onBleedingControlled?.()
+      await updateDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),
+        {...stopUpd, updatedAt:serverTimestamp()})
+    }
+
     const bleedingZones = Object.values(M.self.zones).filter(s=>s.bleeding&&!s.tq)
     if(bleedingZones.length){
       const rate = bleedingZones.reduce((sum,s)=>sum+(INJ[s.inj]?.bleedRate ?? 1.0), 0) / bleedingZones.length
@@ -532,10 +568,10 @@ export function startMedicalTickers(hooks) {
         // Bled out — deceased. Only a full revive can bring them back.
         M.self.dead = true
         M.self.deathCause = 'bleed_out'
-        M.self.hr = 0
+        M.self.hr = 0; M.self.hrTarget = null
         hooks.onBleedOut?.()
         await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
-          bloodPct:0, hr:0, dead:true, deathCause:'bleed_out', uncon:true, updatedAt:serverTimestamp()
+          bloodPct:0, hr:0, hrTarget:null, dead:true, deathCause:'bleed_out', uncon:true, updatedAt:serverTimestamp()
         },{merge:true})
         return
       }
@@ -568,10 +604,10 @@ export function startMedicalTickers(hooks) {
 
     if(M.self.hr >= OD_ARREST_HR) {
       // Cardiac arrest — only a revive can bring them back, same as bleeding out.
-      M.self.dead = true; M.self.deathCause = 'cardiac_arrest'; M.self.uncon = true; M.self.overdosing = false
+      M.self.dead = true; M.self.deathCause = 'cardiac_arrest'; M.self.uncon = true; M.self.overdosing = false; M.self.hrTarget = null
       hooks.onCardiacArrest?.()
       await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
-        hr:OD_ARREST_HR, dead:true, deathCause:'cardiac_arrest', uncon:true, overdosing:false, updatedAt:serverTimestamp()
+        hr:OD_ARREST_HR, dead:true, deathCause:'cardiac_arrest', uncon:true, overdosing:false, hrTarget:null, updatedAt:serverTimestamp()
       },{merge:true})
       return
     }
@@ -579,6 +615,21 @@ export function startMedicalTickers(hooks) {
     // Sync every ~3s so a medic watching this patient sees HR actually rising.
     if(Math.random()<0.33) {
       await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{hr:M.self.hr,updatedAt:serverTimestamp()},{merge:true})
+    }
+  }, 1000)
+
+  // See renderer/js/medical.js — gradual depressant/stim settle toward
+  // hrTarget, never running alongside the OD ramp.
+  setInterval(async () => {
+    if(!M.cardId || M.self.dead || M.self.hrTarget==null) return
+    const diff = M.self.hrTarget - M.self.hr
+    let reached = false
+    if(Math.abs(diff) <= HR_SETTLE_RATE) { M.self.hr = M.self.hrTarget; M.self.hrTarget = null; reached = true }
+    else M.self.hr += Math.sign(diff)*HR_SETTLE_RATE
+    hooks.onHrTick?.(M.self)
+
+    if(reached || Math.random()<0.33) {
+      await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{hr:M.self.hr,hrTarget:M.self.hrTarget,updatedAt:serverTimestamp()},{merge:true})
     }
   }, 1000)
 }
