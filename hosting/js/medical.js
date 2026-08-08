@@ -49,10 +49,11 @@ export const INJ = {
   BLEED_HIGH: { name:'High Velocity Wound',   color:'#991b1b', tier:3, bleedRate:2 },
 }
 export const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
-// See renderer/js/medical.js — packing doesn't stop bleeding instantly,
-// and these are capped against each tier's bleedRate so bandaging a
-// severe wound alone stays survivable instead of guaranteed-fatal.
-export const BLEED_STOP_MS = {1:20000, 2:30000, 3:40000}
+// See renderer/js/medical.js — bleeding PAUSES while actually bandaged and
+// only becomes permanently fixed after this much TOTAL time banked under
+// an applied bandage (survives interruptions via bleedProgressMs/
+// bandagedSince/bleedFixed).
+export const BLEED_STOP_MS = {1:60000, 2:150000, 3:5*60*1000}
 export const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 export const APPLY_MS = {
   bandage_bleed:5000, bandage_frag:15000, unpack_bandage:4000,
@@ -106,7 +107,8 @@ export function freshZone() {
     inj:null, frag:false, fragFound:false, bleeding:false, pain:false,
     tq:false, tqAppliedAt:null, tqNumb:false, limbLost:false,
     chestSeal:false, chestSealAppliedAt:null, chestSealFailing:false,
-    bandaged:false, bandagesApplied:0, bleedStopAt:null,
+    bandaged:false, bandagesApplied:0,
+    bandagedSince:null, bleedProgressMs:0, bleedFixed:false,
     fracture:false, splinted:false,
   }
 }
@@ -117,28 +119,38 @@ export function freshZone() {
 // stops (though bandagesApplied itself IS shown, see renderer status text).
 // Packing "counts" even under a live TQ/chest seal, so hitting the full
 // count while one's on still marks it safe to pull.
+//
+// See renderer/js/medical.js — reaching the full count pauses bleeding
+// right away (same as a tourniquet), it doesn't fix the wound yet. That
+// takes BLEED_STOP_MS[tier] worth of total bandaged time, tracked across
+// interruptions via bandagedSince/bleedProgressMs.
 export function applyBandageToZone(zs) {
   if(!zs) return
   zs.bandagesApplied = (zs.bandagesApplied||0)+1
   const tier = INJ[zs.inj]?.tier
   const need = BANDAGES_NEEDED[tier] || 1
-  if(zs.bandagesApplied>=need) {
+  if(zs.bandagesApplied>=need && !zs.bandaged) {
     zs.bandaged = true
-    // See renderer/js/medical.js — fully packed doesn't mean bleeding stops
-    // that instant, see BLEED_STOP_MS.
-    if(zs.inj) zs.bleedStopAt = Date.now() + (BLEED_STOP_MS[tier]||BLEED_STOP_MS[1])
-    else zs.bleeding = false
+    zs.bleeding = false
+    if(zs.inj) zs.bandagedSince = Date.now()
   }
 }
 
-// The reverse of applyBandageToZone — see renderer/js/medical.js.
+// The reverse of applyBandageToZone — see renderer/js/medical.js. Also
+// banks whatever bleed-stop progress had accrued this stretch, and won't
+// resume bleeding at all if the wound already finished its clock
+// (bleedFixed) — it's actually healed by then.
 export function unpackBandageFromZone(zs) {
   if(!zs || !(zs.bandagesApplied>0)) return
   zs.bandagesApplied = Math.max(0, (zs.bandagesApplied||0)-1)
   const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
+  const wasBandaged = zs.bandaged
   zs.bandaged = zs.bandagesApplied >= need
-  if(!zs.bandaged) zs.bleedStopAt = null
-  if(zs.inj && !zs.bandaged && !zs.tq && !zs.chestSeal) zs.bleeding = true
+  if(wasBandaged && !zs.bandaged && zs.bandagedSince) {
+    zs.bleedProgressMs = (zs.bleedProgressMs||0) + (Date.now()-zs.bandagedSince)
+    zs.bandagedSince = null
+  }
+  if(zs.inj && !zs.bandaged && !zs.tq && !zs.chestSeal && !zs.bleedFixed) zs.bleeding = true
 }
 
 // Fresh TQ — circulation loss hasn't set in yet, so the limb stays usable
@@ -148,12 +160,12 @@ export function applyTourniquetToZone(zs) {
   zs.tq=true; zs.bleeding=false; zs.tqAppliedAt=Date.now(); zs.tqNumb=false
 }
 
-// No inventory cost — pulling a TQ only resumes bleeding if the wound was
-// never packed with a bandage while it was on. Feeling comes back to the
-// limb the moment the TQ is off.
+// No inventory cost — pulling a TQ only resumes bleeding if the wound
+// isn't already packed (or already fully healed, bleedFixed). Feeling
+// comes back to the limb the moment the TQ is off.
 export function removeTourniquetFromZone(zs) {
   zs.tq=false; zs.tqAppliedAt=null; zs.tqNumb=false
-  zs.bleeding = zs.bandaged ? false : !!zs.inj
+  zs.bleeding = (zs.bandaged || zs.bleedFixed) ? false : !!zs.inj
 }
 
 // Chest seal — torso-only equivalent of a tourniquet. See renderer/js/medical.js.
@@ -162,7 +174,7 @@ export function applyChestSealToZone(zs) {
 }
 export function removeChestSealFromZone(zs) {
   zs.chestSeal=false; zs.chestSealAppliedAt=null; zs.chestSealFailing=false
-  zs.bleeding = zs.bandaged ? false : !!zs.inj
+  zs.bleeding = (zs.bandaged || zs.bleedFixed) ? false : !!zs.inj
 }
 
 // Unconscious -> stim wakes them up clean, no risk. Conscious -> stim starts
@@ -188,6 +200,12 @@ export function applyStimTo(obj) {
 export function applyDepressantTo(obj) {
   if(obj.overdosing) { obj.overdosing=false; obj.odStacks=0; obj.hrTarget=78 }
   else obj.hrTarget=55
+}
+
+// See renderer/js/medical.js — morphine settles hr back to normal
+// gradually too, unless an active stim overdose owns hr instead.
+export function applyMorphineTo(obj) {
+  if(!obj.overdosing) obj.hrTarget = 78
 }
 
 // A tourniquet doesn't numb the limb the instant it's on — it takes a few
@@ -428,6 +446,13 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
       const zs = { ...freshZone(), ...(data.zones?.[zone]) }
       transformZone(zs, treatment)
       fieldChanges.zones = { ...data.zones, [zone]: zs }
+      // Morphine's HR effect is systemic (patient-level), not zone-scoped —
+      // see renderer/js/medical.js.
+      if(treatment==='morphine') {
+        const p = { hrTarget:data.hrTarget??null, overdosing:data.overdosing }
+        applyMorphineTo(p)
+        fieldChanges.hrTarget = p.hrTarget
+      }
     } else if(treatment==='stim') {
       const p = { hr:data.hr, hrTarget:data.hrTarget??null, uncon:data.uncon, overdosing:data.overdosing, odStacks:data.odStacks, dead:data.dead }
       applyStimTo(p)
@@ -531,6 +556,26 @@ export function startMedicalTickers(hooks) {
         hooks.onChestSealFailing?.()
       }
     }
+    // See renderer/js/medical.js — a bandaged wound becomes permanently
+    // fixed once it's banked BLEED_STOP_MS[tier] worth of total bandaged
+    // time. Non-down-gated for the same reason the TQ clock above is.
+    for(const z of ZONES) {
+      const s = M.self.zones[z]
+      if(!s?.bandaged || !s.bandagedSince || s.bleedFixed) continue
+      const tier = INJ[s.inj]?.tier
+      const total = BLEED_STOP_MS[tier]||BLEED_STOP_MS[1]
+      const progress = (s.bleedProgressMs||0) + (Date.now()-s.bandagedSince)
+      if(progress >= total) {
+        s.bleedFixed = true
+        s.bleedProgressMs = total
+        s.bandagedSince = null
+        upd[`zones.${z}.bleedFixed`] = true
+        upd[`zones.${z}.bleedProgressMs`] = total
+        upd[`zones.${z}.bandagedSince`] = null
+        changed = true
+        hooks.onBleedingControlled?.()
+      }
+    }
     if(changed) {
       // Matches the treat-modal refresh the original ticker did — only on an
       // actual limb-state transition, not every tick.
@@ -542,26 +587,6 @@ export function startMedicalTickers(hooks) {
 
   setInterval(async () => {
     if(!M.cardId || !M.self.down || M.self.dead) return
-
-    // See renderer/js/medical.js — bandaged wounds keep bleeding for a bit
-    // before BLEED_STOP_MS actually turns it off.
-    const stopUpd = {}
-    let stopChanged = false
-    for(const z of ZONES) {
-      const s = M.self.zones[z]
-      if(s?.bandaged && s.bleeding && s.bleedStopAt && Date.now()>=s.bleedStopAt) {
-        s.bleeding = false
-        s.bleedStopAt = null
-        stopUpd[`zones.${z}.bleeding`] = false
-        stopUpd[`zones.${z}.bleedStopAt`] = null
-        stopChanged = true
-      }
-    }
-    if(stopChanged) {
-      hooks.onBleedingControlled?.()
-      await updateDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),
-        {...stopUpd, updatedAt:serverTimestamp()})
-    }
 
     const bleedingZones = Object.values(M.self.zones).filter(s=>s.bleeding&&!s.tq)
     if(bleedingZones.length){
@@ -597,6 +622,13 @@ export function startMedicalTickers(hooks) {
       // Sync every ~5s to avoid write spam.
       if(Math.random()<0.2) {
         await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{bloodPct:M.self.bloodPct,hr:M.self.hr,updatedAt:serverTimestamp()},{merge:true})
+      }
+    } else if(M.self.bloodPct<100) {
+      // Nothing actively bleeding — slow passive recovery, +1% every 3s.
+      M.self.bloodPct = Math.min(100, M.self.bloodPct + 1/3)
+      hooks.onBloodTick?.(M.self)
+      if(Math.random()<0.2) {
+        await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{bloodPct:M.self.bloodPct,updatedAt:serverTimestamp()},{merge:true})
       }
     }
   }, 1000)

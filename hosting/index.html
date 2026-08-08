@@ -555,6 +555,7 @@ function zoneStatus(zs) {
   if(zs.splinted) return {text:'(<s>FRACTURE</s>) SPLINT', color:'var(--purple)'}
   // Bleeding stopped/packed — no longer urgent (red), reads as controlled.
   if(zs.bandaged) return {text:`BANDAGED${zs.bandagesApplied>1?' x'+zs.bandagesApplied:''}`, color:'var(--amber)'}
+  if(zs.bleedFixed) return {text:'HEALED', color:'var(--green)'}
   return {text:'CLEAR', color:'#a8b8cc'}
 }
 function renderMedicalView() {
@@ -668,8 +669,8 @@ function renderZoneTreatRow(zone, zs, inv) {
   const actions = []
   const bandagesApplied = zs?.bandagesApplied||0
   const woundExposed = bandagesApplied===0 && !zs?.chestSeal
-  if(zs?.inj && !zs.bandaged) actions.push(`<button class="btn" ${!inv.bandage?'disabled':''} onclick="doTreat('${zone}','bandage')" style="font-size:9px;padding:7px 8px">BANDAGE</button>`)
-  if(bandagesApplied>0) actions.push(`<button class="btn" onclick="doTreat('${zone}','unpack_bandage')" style="font-size:9px;padding:7px 8px">UNPACK (${bandagesApplied})</button>`)
+  if(zs?.inj && !zs.bandaged && !zs.bleedFixed) actions.push(`<button class="btn" ${!inv.bandage?'disabled':''} onclick="doTreat('${zone}','bandage')" style="font-size:9px;padding:7px 8px">BANDAGE</button>`)
+  if(bandagesApplied>0) actions.push(`<button class="btn" onclick="doTreat('${zone}','unpack_bandage')" style="font-size:9px;padding:7px 8px" title="${zs?.bleedFixed?"Wound's fully healed — won't reopen":'Reopens the wound'}">UNPACK (${bandagesApplied})</button>`)
   if(Medical.LIMBS.includes(zone) && !zs?.tq && !zs?.limbLost) actions.push(`<button class="btn btn-amber" ${!inv.tourniquet?'disabled':''} onclick="doTreat('${zone}','tourniquet')" style="font-size:9px;padding:7px 8px">TQ</button>`)
   if(zs?.tq && !zs.limbLost) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_tourniquet')" style="font-size:9px;padding:7px 8px">REMOVE TQ</button>`)
   if(zone==='torso' && !zs?.chestSeal) actions.push(`<button class="btn" ${!inv.chestseal?'disabled':''} onclick="doTreat('${zone}','chest_seal')" style="font-size:9px;padding:7px 8px;background:rgba(251,146,60,.12);border-color:rgba(251,146,60,.45);color:#fb923c">SEAL</button>`)

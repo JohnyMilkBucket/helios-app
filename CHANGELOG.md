@@ -3,6 +3,22 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.28
+- Reworked how bandaging actually resolves a wound — this was designed
+  wrong in v1.4.25/26. Packing a wound now pauses bleeding immediately
+  (same as a tourniquet) instead of leaving it bleeding for a fixed
+  delay. It only becomes permanently fixed once it's spent enough total
+  time actually bandaged — 1 minute (low velocity), 2:30 (medium), 5:00
+  (high). Pulling the bandage off before that resumes bleeding and pauses
+  the clock; putting it back on picks up right where it left off instead
+  of restarting. Once a wound is fully healed, taking the bandage off
+  doesn't reopen it anymore.
+- Blood volume now slowly regenerates on its own whenever nothing is
+  actively bleeding — about 1% every 3 seconds.
+- Morphine now also lets an elevated heart rate settle back down to
+  normal (gradually), unless the patient's currently overdosing on
+  stims — that still takes priority.
+
 ## v1.4.27
 - Rendered the body map in a standalone test harness to visually check the
   v1.4.23 reshape and every treatment overlay actually look right (they

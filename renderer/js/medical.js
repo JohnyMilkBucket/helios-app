@@ -43,25 +43,21 @@ export const INJ = {
   BLEED_HIGH: { name:'High Velocity Wound',   color:'#991b1b', tier:3, bleedRate:2 },
 }
 export const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
-// Packing a wound doesn't stop the bleeding the instant the last bandage
-// goes on — it keeps bleeding at its normal rate for a bit longer, scaled
-// to how bad the wound was, before the packing actually takes hold. See
-// applyBandageToZone/bleedStopAt.
+// A packed wound doesn't stop bleeding forever the instant it's packed —
+// bleeding PAUSES while it's actually bandaged (same as a tourniquet), and
+// only becomes permanently fixed once it's accumulated this much total time
+// under an applied bandage. That accumulation survives interruptions:
+// pulling the bandage off before it's done banks whatever progress was made
+// (bleedProgressMs) and resumes bleeding; putting a bandage back on picks
+// up from that banked point instead of restarting. See applyBandageToZone/
+// unpackBandageFromZone/bleedProgressMs/bandagedSince/bleedFixed.
 //
-// These are capped against each tier's own bleedRate on purpose, not just
-// picked as round numbers — bleeding stays fully active (same rate as an
-// unpacked wound) for the whole delay, so delay*bleedRate is real blood
-// lost AFTER a successful pack, on top of whatever the wound already cost
-// before it was bandaged. A tier-3 wound (bleedRate 2%/s) bleeds out in 50s
-// on its own; a 5-minute delay there would make bandaging a severe wound
-// (with no TQ/chest-seal ever applied) unconditionally fatal every time,
-// 250s before the pack could ever finish — the exact opposite of what this
-// feature is supposed to do. These values keep the "worse wound takes
-// longer to fully resolve" shape while capping the added risk at roughly
-// 13% / 30% / 80% blood loss across the delay (tier 3 is genuinely
-// dangerous to bandage alone — you'll likely go unconscious right near the
-// end — but survivable, not an automatic kill).
-export const BLEED_STOP_MS = {1:20000, 2:30000, 3:40000}
+// Because bleeding is paused (not still draining) for the whole time it's
+// actually bandaged, these durations aren't capped against bleedRate the
+// way an earlier version of this mechanic had to be — the only blood lost
+// during this window is whatever accrues in the gaps where the patient
+// chooses to leave it unwrapped.
+export const BLEED_STOP_MS = {1:60000, 2:150000, 3:5*60*1000}
 export const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 export const APPLY_MS = {
   bandage_bleed:5000, bandage_frag:15000, unpack_bandage:4000,
@@ -119,7 +115,8 @@ export function freshZone() {
     inj:null, frag:false, fragFound:false, bleeding:false, pain:false,
     tq:false, tqAppliedAt:null, tqNumb:false, limbLost:false,
     chestSeal:false, chestSealAppliedAt:null, chestSealFailing:false,
-    bandaged:false, bandagesApplied:0, bleedStopAt:null,
+    bandaged:false, bandagesApplied:0,
+    bandagedSince:null, bleedProgressMs:0, bleedFixed:false,
     fracture:false, splinted:false,
   }
 }
@@ -130,18 +127,26 @@ export function freshZone() {
 // stops (though bandagesApplied itself IS shown, see renderer status text).
 // Packing "counts" even under a live TQ/chest seal, so hitting the full
 // count while one's on still marks it safe to pull.
+//
+// Reaching the full count pauses bleeding right away (same as a
+// tourniquet) — it does NOT mean the wound is actually fixed yet. That
+// only happens once it's spent BLEED_STOP_MS[tier] worth of total time
+// under an applied bandage (see the ticker in startMedicalTickers).
+// bandagedSince marks when this packed stretch started; bleedProgressMs
+// (banked in unpackBandageFromZone) carries over whatever time was already
+// earned from an earlier stretch, so pulling the bandage off and back on
+// resumes the countdown instead of restarting it.
 export function applyBandageToZone(zs) {
   if(!zs) return
   zs.bandagesApplied = (zs.bandagesApplied||0)+1
   const tier = INJ[zs.inj]?.tier
   const need = BANDAGES_NEEDED[tier] || 1
-  if(zs.bandagesApplied>=need) {
+  if(zs.bandagesApplied>=need && !zs.bandaged) {
     zs.bandaged = true
-    // Fully packed doesn't mean bleeding stops that instant — see
-    // BLEED_STOP_MS. A zone with no real injury (testing a bandage on a
-    // healthy limb) was never bleeding, so there's nothing to actually stop.
-    if(zs.inj) zs.bleedStopAt = Date.now() + (BLEED_STOP_MS[tier]||BLEED_STOP_MS[1])
-    else zs.bleeding = false
+    zs.bleeding = false
+    // A zone with no real injury (testing a bandage on a healthy limb) has
+    // no bleed-stop clock to run — there's nothing to actually fix.
+    if(zs.inj) zs.bandagedSince = Date.now()
   }
 }
 
@@ -150,14 +155,21 @@ export function applyBandageToZone(zs) {
 // to fully reopen, same as it took 3 separate timed applications to pack.
 // Dropping below the needed count immediately reopens the wound (resumes
 // bleeding) unless something else is currently controlling it (a TQ or
-// chest seal already stops bleeding on its own, independent of packing).
+// chest seal stops bleeding independent of packing) — or unless the wound
+// already finished its bleed-stop clock (bleedFixed), in which case it's
+// actually healed and pulling the bandage off doesn't reopen it anymore.
 export function unpackBandageFromZone(zs) {
   if(!zs || !(zs.bandagesApplied>0)) return
   zs.bandagesApplied = Math.max(0, (zs.bandagesApplied||0)-1)
   const need = BANDAGES_NEEDED[INJ[zs.inj]?.tier] || 1
+  const wasBandaged = zs.bandaged
   zs.bandaged = zs.bandagesApplied >= need
-  if(!zs.bandaged) zs.bleedStopAt = null // pack was undone before it ever fully took hold
-  if(zs.inj && !zs.bandaged && !zs.tq && !zs.chestSeal) zs.bleeding = true
+  if(wasBandaged && !zs.bandaged && zs.bandagedSince) {
+    // Bank the progress made this stretch before pausing the clock.
+    zs.bleedProgressMs = (zs.bleedProgressMs||0) + (Date.now()-zs.bandagedSince)
+    zs.bandagedSince = null
+  }
+  if(zs.inj && !zs.bandaged && !zs.tq && !zs.chestSeal && !zs.bleedFixed) zs.bleeding = true
 }
 
 // Fresh TQ — circulation loss hasn't set in yet, so the limb stays usable
@@ -167,12 +179,12 @@ export function applyTourniquetToZone(zs) {
   zs.tq=true; zs.bleeding=false; zs.tqAppliedAt=Date.now(); zs.tqNumb=false
 }
 
-// No inventory cost — pulling a TQ only resumes bleeding if the wound was
-// never packed with a bandage while it was on. Feeling comes back to the
-// limb the moment the TQ is off.
+// No inventory cost — pulling a TQ only resumes bleeding if the wound
+// isn't already packed (or already fully healed) — see bleedFixed. Feeling
+// comes back to the limb the moment the TQ is off.
 export function removeTourniquetFromZone(zs) {
   zs.tq=false; zs.tqAppliedAt=null; zs.tqNumb=false
-  zs.bleeding = zs.bandaged ? false : !!zs.inj
+  zs.bleeding = (zs.bandaged || zs.bleedFixed) ? false : !!zs.inj
 }
 
 // Chest seal — torso-only equivalent of a tourniquet. Same "doesn't
@@ -185,7 +197,7 @@ export function applyChestSealToZone(zs) {
 }
 export function removeChestSealFromZone(zs) {
   zs.chestSeal=false; zs.chestSealAppliedAt=null; zs.chestSealFailing=false
-  zs.bleeding = zs.bandaged ? false : !!zs.inj
+  zs.bleeding = (zs.bandaged || zs.bleedFixed) ? false : !!zs.inj
 }
 
 // Unconscious -> stim wakes them up clean, no risk. Conscious -> stim starts
@@ -213,6 +225,15 @@ export function applyStimTo(obj) {
 export function applyDepressantTo(obj) {
   if(obj.overdosing) { obj.overdosing=false; obj.odStacks=0; obj.hrTarget=78 }
   else obj.hrTarget=55
+}
+
+// Pain was part of what was keeping HR elevated — relieving it (morphine)
+// lets HR drift back down to a normal resting rate, gradually via the same
+// settle ticker as a depressant. Doesn't touch an active stim overdose —
+// that's a different mechanism entirely and pain relief alone shouldn't be
+// able to interrupt it (would fight the OD ramp ticker over hr otherwise).
+export function applyMorphineTo(obj) {
+  if(!obj.overdosing) obj.hrTarget = 78
 }
 
 // A tourniquet doesn't numb the limb the instant it's on — it takes a few
@@ -505,6 +526,14 @@ export async function applyTreatment({zone, treatment, target, patientId}) {
       const zs = { ...freshZone(), ...(data.zones?.[zone]) }
       transformZone(zs, treatment)
       fieldChanges.zones = { ...data.zones, [zone]: zs }
+      // Morphine is the one zone treatment with a systemic side effect too
+      // (see applyMorphineTo) — hrTarget lives on the patient, not the
+      // zone, so it's a separate field alongside the zones patch below.
+      if(treatment==='morphine') {
+        const p = { hrTarget:data.hrTarget??null, overdosing:data.overdosing }
+        applyMorphineTo(p)
+        fieldChanges.hrTarget = p.hrTarget
+      }
     } else if(treatment==='stim') {
       const p = { hr:data.hr, hrTarget:data.hrTarget??null, uncon:data.uncon, overdosing:data.overdosing, odStacks:data.odStacks, dead:data.dead }
       applyStimTo(p)
@@ -628,6 +657,31 @@ export function startMedicalTickers(hooks) {
         hooks.onChestSealFailing?.()
       }
     }
+    // Bandaged wounds don't stay "paused" forever — once a zone has spent
+    // BLEED_STOP_MS[tier] worth of TOTAL time actually bandaged (tracked
+    // across interruptions via bleedProgressMs/bandagedSince, see
+    // applyBandageToZone/unpackBandageFromZone), it's permanently fixed:
+    // bleeding can never resume on it again, even if unwrapped later.
+    // Deliberately in this non-down-gated ticker, not the down-gated blood
+    // ticker below — same reasoning as the TQ clock above, this can run on
+    // a preemptively-bandaged zone before ever going down.
+    for(const z of ZONES) {
+      const s = M.self.zones[z]
+      if(!s?.bandaged || !s.bandagedSince || s.bleedFixed) continue
+      const tier = INJ[s.inj]?.tier
+      const total = BLEED_STOP_MS[tier]||BLEED_STOP_MS[1]
+      const progress = (s.bleedProgressMs||0) + (Date.now()-s.bandagedSince)
+      if(progress >= total) {
+        s.bleedFixed = true
+        s.bleedProgressMs = total
+        s.bandagedSince = null
+        upd[`zones.${z}.bleedFixed`] = true
+        upd[`zones.${z}.bleedProgressMs`] = total
+        upd[`zones.${z}.bandagedSince`] = null
+        changed = true
+        hooks.onBleedingControlled?.()
+      }
+    }
     if(changed) {
       // Matches the treat-modal refresh the original ticker did — only on an
       // actual limb-state transition, not every tick.
@@ -639,29 +693,6 @@ export function startMedicalTickers(hooks) {
 
   setInterval(async () => {
     if(!M.cardId || !M.self.down || M.self.dead) return
-
-    // Bandaged wounds don't stop bleeding the instant the last bandage goes
-    // on — see applyBandageToZone/BLEED_STOP_MS. Once that delay elapses,
-    // flip it off for real.
-    const stopUpd = {}
-    let stopChanged = false
-    for(const z of ZONES) {
-      const s = M.self.zones[z]
-      if(s?.bandaged && s.bleeding && s.bleedStopAt && Date.now()>=s.bleedStopAt) {
-        s.bleeding = false
-        s.bleedStopAt = null
-        // Leaf-field dot-paths, not the whole zone object — same
-        // stale-overwrite risk as the TQ ticker above.
-        stopUpd[`zones.${z}.bleeding`] = false
-        stopUpd[`zones.${z}.bleedStopAt`] = null
-        stopChanged = true
-      }
-    }
-    if(stopChanged) {
-      hooks.onBleedingControlled?.()
-      await updateDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),
-        {...stopUpd, updatedAt:serverTimestamp()})
-    }
 
     const bleedingZones = Object.values(M.self.zones).filter(s=>s.bleeding&&!s.tq)
     if(bleedingZones.length){
@@ -697,6 +728,13 @@ export function startMedicalTickers(hooks) {
       // Sync every ~5s to avoid write spam.
       if(Math.random()<0.2) {
         await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{bloodPct:M.self.bloodPct,hr:M.self.hr,updatedAt:serverTimestamp()},{merge:true})
+      }
+    } else if(M.self.bloodPct<100) {
+      // Nothing actively bleeding — slow passive recovery, +1% every 3s.
+      M.self.bloodPct = Math.min(100, M.self.bloodPct + 1/3)
+      hooks.onBloodTick?.(M.self)
+      if(Math.random()<0.2) {
+        await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{bloodPct:M.self.bloodPct,updatedAt:serverTimestamp()},{merge:true})
       }
     }
   }, 1000)

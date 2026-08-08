@@ -1231,16 +1231,17 @@ html.popout-mode #content{padding:10px 12px}
           <b style="color:var(--red)">High Velocity</b> — severe bleed, ~1% blood every 0.5s. Severe enough to drop you unconscious immediately.<br>
           <b style="color:var(--orange)">Fragmentation</b> — can accompany any bleed. Doesn't change the bleed itself, just takes longer to bandage (15s instead of 5s).<br>
           <b style="color:#a78bfa">Fracture</b> — can also accompany a wound. Splint it to fix.<br><br>
-          <b style="color:#9ca3af">A hit to the head is always fatal.</b> Multiple zones can be hit at once.
+          <b style="color:#9ca3af">A hit to the head is always fatal.</b> Multiple zones can be hit at once.<br><br>
+          As long as nothing is actively bleeding, blood volume slowly recovers on its own — about 1% every 3 seconds.
         </div>
       </div>
       <div style="margin-bottom:14px;padding:10px 12px;border:1px solid rgba(91,139,181,.25);background:rgba(91,139,181,.07)">
         <div class="orb" style="font-size:10px;color:var(--hi);margin-bottom:6px;letter-spacing:.1em">TREATMENTS</div>
         <div style="font-size:11px;color:#cdd9e8;line-height:1.9">
-          🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before it's fully packed — keep bandaging until it is. Even once packed, bleeding doesn't stop that instant: it keeps going a bit longer, scaled to the wound — 20s for a low velocity wound, 30s medium, 40s high. A severe wound bandaged with no tourniquet backing it up is genuinely risky — get a TQ/seal on first if you can. 5s per try, 15s if fragmentation is present.<br>
+          🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before it's fully packed — keep bandaging until it is. Packing it pauses the bleeding right away, but the wound isn't actually fixed for good until it's spent enough total time bandaged: 1 minute for a low velocity wound, 2:30 medium, 5:00 high. Pull the bandage off before that and bleeding resumes (and the clock pauses) — put it back on and it picks up where it left off, it doesn't restart. 5s per try, 15s if fragmentation is present.<br>
           🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only, never head/torso. Stops bleeding instantly (3s to apply). It doesn't numb the limb right away — past ~4 minutes it goes numb and becomes unusable (see INCAPACITATION below, you'll get a callout when it happens), and past ~6 minutes you lose the limb entirely.<br>
           🦴 <b style="color:#a78bfa">Splint</b> — Fixes a fracture. 6s.<br>
-          💉 <b style="color:#34d399">Morphine</b> — Relieves pain on a wounded zone. Doesn't affect bleeding or anything else. 3s.<br>
+          💉 <b style="color:#34d399">Morphine</b> — Relieves pain on a wounded zone, and lets an elevated heart rate settle back down to normal (gradually, unless they're currently overdosing on stims — that takes priority). Doesn't affect bleeding. 3s.<br>
           ⚡ <b style="color:var(--purple)">Stimulant</b> — Safe wake-up on an unconscious patient. On a conscious patient it's an overdose: heart rate climbs gradually (about 3 bpm/sec) from whatever it already was toward cardiac arrest at 280. A second dose taken while already overdosing doesn't restart the climb, it speeds it up. Only a depressant stops it. 3s.<br>
           💧 <b style="color:var(--blue)">Depressant</b> — Gradually lowers heart rate back down to normal. If the patient is currently overdosing on stims, it clears the overdose outright and brings HR back down the same way instead of an instant snap. 3s.<br>
           🩸 <b style="color:var(--red)">Blood Bag</b> — Restores 40% blood volume. 10s. Medic item.
@@ -1382,9 +1383,10 @@ const fns  = getFunctions(firebaseApp)
 const EMAIL_DOMAIN = '@helios.internal'
 const MAX_RADIO = 2
 // Injury/treatment domain constants (INJ, BANDAGES_NEEDED, FRAG_INFO,
-// APPLY_MS, ZONES, LIMBS, TQ_WARN_MS, TQ_LOSS_MS) now live in js/medical.js
-// — destructured below so every existing reference in this file keeps working.
-const { INJ, BANDAGES_NEEDED, FRAG_INFO, APPLY_MS, ZONES, LIMBS, TQ_WARN_MS, TQ_LOSS_MS } = Medical
+// APPLY_MS, ZONES, LIMBS, TQ_WARN_MS, TQ_LOSS_MS, BLEED_STOP_MS) now live in
+// js/medical.js — destructured below so every existing reference in this
+// file keeps working.
+const { INJ, BANDAGES_NEEDED, FRAG_INFO, APPLY_MS, ZONES, LIMBS, TQ_WARN_MS, TQ_LOSS_MS, BLEED_STOP_MS } = Medical
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
 const ZONE_SPEECH = {l_arm:'left arm',r_arm:'right arm',l_leg:'left leg',r_leg:'right leg'}
 const ICON_POS = {head:{x:93,y:28},torso:{x:93,y:105},l_arm:{x:21,y:105},r_arm:{x:165,y:105},l_leg:{x:68,y:208},r_leg:{x:118,y:208}}
@@ -1407,6 +1409,11 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.28', items:[
+    'Reworked bandaging: packing a wound now pauses bleeding right away and permanently fixes it after enough total bandaged time (1:00/2:30/5:00) — pulling it off resumes bleeding and pauses the clock, reapplying resumes instead of restarting.',
+    'Blood now slowly regenerates (+1%/3s) whenever nothing is actively bleeding.',
+    'Morphine now also gradually settles an elevated heart rate back to normal.',
+  ]},
   { v:'1.4.27', items:[
     'Fixed a zone showing a static blood-drop icon even when it wasn\'t bleeding (bandaged/safe or limb-lost zones no longer show one).',
   ]},
@@ -3321,6 +3328,9 @@ function zoneColors(zones, z) {
   // Bleeding stopped/packed — the wound isn't gone, but it's under
   // control now, so it no longer needs to read as urgent (red).
   if(s.bandaged)  return {fill:'rgba(250,204,21,0.22)', stroke:'#facc15'}
+  // Fully healed (bleed-stop clock finished) — shown even once the
+  // bandage itself comes back off, since it genuinely can't reopen.
+  if(s.bleedFixed) return {fill:'rgba(74,222,128,0.15)',stroke:'#4ade80'}
   if(s.splinted)  return {fill:'rgba(167,139,250,0.1)',stroke:'#a78bfa88'}
   const c = INJ[s.inj]?.color||'#8db3d4'
   return {fill:c+'18',stroke:c}
@@ -3617,6 +3627,14 @@ window.openTreat = (zone, target='self') => {
     }
     if((s.bandagesApplied||0)>0) st+=`<div style="font-size:11px;color:#a8b8cc;margin-top:4px">${s.bandagesApplied} bandage${s.bandagesApplied===1?'':'s'} on this wound${s.bandaged?' — fully packed':''}</div>`
     if(!s.bandaged && (s.bandagesApplied||0)>0 && s.bleeding) st+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">Wound partially packed — keep bandaging</div>`
+    if(s.bandaged && !s.bleedFixed && s.bandagedSince) {
+      const total = BLEED_STOP_MS[INJ[s.inj]?.tier]||BLEED_STOP_MS[1]
+      const remaining = Math.max(0, total - ((s.bleedProgressMs||0)+(Date.now()-s.bandagedSince)))
+      const mins = Math.floor(remaining/60000), secs = Math.ceil((remaining%60000)/1000)
+      st+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">Healing — ${mins>0?mins+'m ':''}${secs}s until fully closed (keep the bandage on)</div>`
+    } else if(s.bleedFixed) {
+      st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">✓ Wound fully closed — won't reopen</div>`
+    }
     if(s.bandaged && s.tq) st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">Wound packed — safe to remove TQ</div>`
     if(s.bandaged && s.chestSeal) st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">Wound packed — safe to remove seal</div>`
     if(s.fracture) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-top:4px">${svgFracture(13)}<span style="color:#a78bfa;font-weight:700">FRACTURED</span></div>`
@@ -3656,10 +3674,12 @@ window.openTreat = (zone, target='self') => {
 
   const treats = [
     {id:'bandage', label:'BANDAGE', color:'#4ade80', timeSec:s?.frag?15:5,
-      desc: s?.bandaged ? '✓ FULLY PACKED' : !s?.inj ? '❌ NOTHING TO PACK' : (s?.frag?'Pack frag — 15s':'Stop bleed — 5s'),
-      locked: !s?.inj || s?.bandaged},
+      desc: s?.bleedFixed ? '✓ FULLY HEALED' : s?.bandaged ? '✓ FULLY PACKED' : !s?.inj ? '❌ NOTHING TO PACK' : (s?.frag?'Pack frag — 15s':'Stop bleed — 5s'),
+      locked: !s?.inj || s?.bandaged || s?.bleedFixed},
     ...(bandagesApplied>0 ? [
-      {id:'unpack_bandage', label:'UNPACK', color:'#4ade80', timeSec:4, desc:`Reopens wound — 4s (${bandagesApplied} on)`, noInv:true},
+      {id:'unpack_bandage', label:'UNPACK', color:'#4ade80', timeSec:4,
+        desc: s?.bleedFixed ? `Wound's fully healed — won't reopen (${bandagesApplied} on)` : `Reopens wound — 4s (${bandagesApplied} on)`,
+        noInv:true},
     ] : []),
     s?.tq
       ? {id:'remove_tourniquet', label:'REMOVE TQ', color:'#fbbf24', timeSec:2, desc:s?.bandaged?'Wound is packed — safe':'⚠ Resumes bleeding — 2s', noInv:true}
@@ -3768,6 +3788,7 @@ window.startApply = (zone, treatment, target) => {
   if(treatment==='tourniquet' && zs?.tq) { blockTreatment('Already has a tourniquet on') ; return }
   if(treatment==='chest_seal' && zs?.chestSeal) { blockTreatment('Already has a chest seal on') ; return }
   if(treatment==='bandage' && zs?.bandaged) { blockTreatment('Wound is already fully packed') ; return }
+  if(treatment==='bandage' && zs?.bleedFixed) { blockTreatment('Wound is already fully healed') ; return }
   if(treatment==='morphine' && !zs?.pain) { blockTreatment('No pain to relieve here') ; return }
   if(treatment==='splint' && !zs?.fracture) { blockTreatment('No fracture on this zone — nothing to splint') ; return }
   if(treatment==='unpack_bandage' && !(zs?.bandagesApplied>0)) { blockTreatment('No bandages on this zone to unpack') ; return }
