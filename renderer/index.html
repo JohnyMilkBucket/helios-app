@@ -1407,6 +1407,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.27', items:[
+    'Fixed a zone showing a static blood-drop icon even when it wasn\'t bleeding (bandaged/safe or limb-lost zones no longer show one).',
+  ]},
   { v:'1.4.26', items:[
     'Fixed the v1.4.25 bleed-stop timings — a severe wound bandaged alone was guaranteed fatal before the pack could finish. Retuned to 20s/30s/40s.',
     'Fixed depressant\'s calming effect being fought/overwritten by an unrelated heart-rate ticker.',
@@ -3348,8 +3351,13 @@ function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='
       } else if(s.chestSeal && z==='torso') {
         ig.innerHTML += svgChestSealOverlay(TORSO_SEAL_BOX)
       } else {
-        let ico = s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.splinted ? svgFracture(13) : s.frag ? svgFrag(13) : svgBleed(13,false)
-        ig.innerHTML += `<foreignObject x="${p.x}" y="${p.y}" width="14" height="14">${ico}</foreignObject>`
+        // No icon at all once a wound is packed/controlled (or the limb's
+        // gone) — this used to fall through to a static blood-drop icon
+        // for ANY zone with data that wasn't actively bleeding/fractured/
+        // splinted/fragged, including bandaged-and-safe and limb-lost
+        // zones, which read as "still bleeding" when it wasn't true.
+        let ico = s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.splinted ? svgFracture(13) : s.frag ? svgFrag(13) : null
+        if(ico) ig.innerHTML += `<foreignObject x="${p.x}" y="${p.y}" width="14" height="14">${ico}</foreignObject>`
       }
       // Fracture/frag each get their own small marker too, since they'd
       // otherwise be hidden behind a bleed/TQ/seal icon whenever combined

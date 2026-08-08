@@ -3,6 +3,15 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.27
+- Rendered the body map in a standalone test harness to visually check the
+  v1.4.23 reshape and every treatment overlay actually look right (they
+  do). Caught and fixed one real bug along the way: a zone's icon used to
+  fall back to a static blood-drop for ANY zone with data that wasn't
+  actively bleeding/fractured/splinted/fragged — including a bandaged
+  (safe) wound or a lost limb — making it look like it was still bleeding
+  when it wasn't. No icon shows now for those states.
+
 ## v1.4.26
 - Full bug-hunt pass across the whole app (desktop, mobile, Cloud Functions,
   security rules, admin panel). Fixes:
