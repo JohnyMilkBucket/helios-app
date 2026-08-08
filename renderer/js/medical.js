@@ -47,7 +47,21 @@ export const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
 // goes on — it keeps bleeding at its normal rate for a bit longer, scaled
 // to how bad the wound was, before the packing actually takes hold. See
 // applyBandageToZone/bleedStopAt.
-export const BLEED_STOP_MS = {1:20000, 2:60000, 3:5*60*1000}
+//
+// These are capped against each tier's own bleedRate on purpose, not just
+// picked as round numbers — bleeding stays fully active (same rate as an
+// unpacked wound) for the whole delay, so delay*bleedRate is real blood
+// lost AFTER a successful pack, on top of whatever the wound already cost
+// before it was bandaged. A tier-3 wound (bleedRate 2%/s) bleeds out in 50s
+// on its own; a 5-minute delay there would make bandaging a severe wound
+// (with no TQ/chest-seal ever applied) unconditionally fatal every time,
+// 250s before the pack could ever finish — the exact opposite of what this
+// feature is supposed to do. These values keep the "worse wound takes
+// longer to fully resolve" shape while capping the added risk at roughly
+// 13% / 30% / 80% blood loss across the delay (tier 3 is genuinely
+// dangerous to bandage alone — you'll likely go unconscious right near the
+// end — but survivable, not an automatic kill).
+export const BLEED_STOP_MS = {1:20000, 2:30000, 3:40000}
 export const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 export const APPLY_MS = {
   bandage_bleed:5000, bandage_frag:15000, unpack_bandage:4000,
@@ -77,14 +91,15 @@ export function randFindFragMs() {
   return FIND_FRAG_MIN_MS + Math.random()*(FIND_FRAG_MAX_MS-FIND_FRAG_MIN_MS)
 }
 
-// Stim overdose — one dose kicks HR up to OD_START_HR and it climbs
-// OD_CLIMB_RATE bpm/sec from there (checked once per second by the ramp
-// ticker in startMedicalTickers) until it crosses OD_ARREST_HR, which is
-// cardiac arrest. At the base rate that's OD_START_HR to OD_ARREST_HR in
-// ~27s. Each additional dose taken while already overdosing doesn't restart
-// the ramp from OD_START_HR — it stacks onto odStacks, which multiplies the
-// climb rate (OD_STACK_MULT extra per stack beyond the first), so stacking
-// doses makes arrest arrive faster, not just "sooner started."
+// Stim overdose — one dose starts HR climbing from wherever it already is
+// (no snap to a fixed starting point) at OD_CLIMB_RATE bpm/sec, checked once
+// per second by the ramp ticker in startMedicalTickers, until it crosses
+// OD_ARREST_HR, which is cardiac arrest. Each additional dose taken while
+// already overdosing doesn't touch hr directly — it stacks onto odStacks,
+// which multiplies the climb rate (OD_STACK_MULT extra per stack beyond the
+// first), so stacking doses makes arrest arrive faster, not just "sooner
+// started." OD_START_HR is unused by the ramp itself now (kept as a
+// reference/typical-onset value) — see applyStimTo.
 export const OD_START_HR = 200
 export const OD_ARREST_HR = 280
 export const OD_CLIMB_RATE = 3
@@ -573,14 +588,21 @@ export function startMedicalTickers(hooks) {
       if(tqMs >= TQ_LOSS_MS) {
         s.limbLost = true
         s.bleeding = false // nothing left to bleed
-        upd[`zones.${z}`] = s
+        // Deep dot-path per changed field, not the whole zone object — a
+        // medic could be mid-transaction on this same zone (e.g. removing
+        // the TQ right as it expires) using fresher server state than this
+        // ticker's local M.self.zones copy. Writing the whole stale object
+        // back would silently clobber whatever they just changed; writing
+        // only the leaf fields this ticker actually owns can't.
+        upd[`zones.${z}.limbLost`] = true
+        upd[`zones.${z}.bleeding`] = false
         changed = true
         hooks.onLimbLost?.(z)
       } else if(!s.tqNumb && tqMs >= TQ_WARN_MS) {
         // Circulation loss just caught up to this limb — it goes numb and
         // becomes unusable, distinct from (and well before) losing it outright.
         s.tqNumb = true
-        upd[`zones.${z}`] = s
+        upd[`zones.${z}.tqNumb`] = true
         changed = true
         hooks.onLimbNumb?.(z)
       }
@@ -601,7 +623,7 @@ export function startMedicalTickers(hooks) {
         return
       } else if(!ts.chestSealFailing && sealMs >= TQ_WARN_MS) {
         ts.chestSealFailing = true
-        upd['zones.torso'] = ts
+        upd['zones.torso.chestSealFailing'] = true
         changed = true
         hooks.onChestSealFailing?.()
       }
@@ -628,7 +650,10 @@ export function startMedicalTickers(hooks) {
       if(s?.bandaged && s.bleeding && s.bleedStopAt && Date.now()>=s.bleedStopAt) {
         s.bleeding = false
         s.bleedStopAt = null
-        stopUpd[`zones.${z}`] = s
+        // Leaf-field dot-paths, not the whole zone object — same
+        // stale-overwrite risk as the TQ ticker above.
+        stopUpd[`zones.${z}.bleeding`] = false
+        stopUpd[`zones.${z}.bleedStopAt`] = null
         stopChanged = true
       }
     }

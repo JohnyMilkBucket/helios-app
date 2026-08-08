@@ -24,7 +24,7 @@ const { getMessaging } = require('firebase-admin/messaging')
 initializeApp()
 const db = getFirestore()
 
-const EMPTY_LD = { bandage: 0, tourniquet: 0, splint: 0, stim: 0, depressant: 0, blood: 0, morphine: 0 }
+const EMPTY_LD = { bandage: 0, tourniquet: 0, chestseal: 0, splint: 0, stim: 0, depressant: 0, blood: 0, morphine: 0 }
 
 // Card creation and license renewal used to run as a client-side Firestore
 // transaction (see the old doCreateCard/doRenewLicense in renderer/index.html):

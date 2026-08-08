@@ -19,7 +19,7 @@
 // a new sub-unit, assigned/unassigned a member, etc).
 
 import {
-  doc, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, deleteField,
+  doc, setDoc, updateDoc, deleteDoc, addDoc, collection, serverTimestamp, deleteField, runTransaction,
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 
 export function normalizeSubUnits(subUnits) {
@@ -65,29 +65,43 @@ export async function deleteSubUnit(db, cardId, unitId, subId) {
     { [`subUnits.${subId}`]: deleteField() })
 }
 
-// unit must be the current unit object (for directMembers/subUnits reads);
-// subId falsy means "assign directly to the unit, not a sub-unit".
+// unit.id is all that's actually used from the passed-in unit — every read
+// happens fresh inside the transaction below, never from this (possibly
+// stale, since it's whatever the caller last rendered) snapshot. Two admins
+// assigning different members at the same moment — to the same unit's
+// direct roster, or the same sub-unit — used to silently clobber each
+// other here (read-modify-write from a stale local copy, the same bug
+// class this file's header describes fixing for CROSS-sub-unit edits, just
+// not yet for same-unit/same-sub-unit ones). The transaction closes that.
 export async function assignMember(db, cardId, unit, subId, uid) {
-  if(!subId) {
-    const list = [...new Set([...(unit.directMembers||[]), uid])]
-    await setDoc(doc(db,'cards',cardId,'units',unit.id), {directMembers:list}, {merge:true})
-    return
-  }
-  const map = normalizeSubUnits(unit.subUnits)
-  const sub = map[subId] || {name:'', members:[]}
-  const members = [...new Set([...(sub.members||[]), uid])]
-  await updateDoc(doc(db,'cards',cardId,'units',unit.id), { [`subUnits.${subId}.members`]: members })
+  const ref = doc(db,'cards',cardId,'units',unit.id)
+  await runTransaction(db, async (tx) => {
+    const data = (await tx.get(ref)).data() || {}
+    if(!subId) {
+      const list = [...new Set([...(data.directMembers||[]), uid])]
+      tx.update(ref, { directMembers: list })
+      return
+    }
+    const map = normalizeSubUnits(data.subUnits)
+    const sub = map[subId] || {name:'', members:[]}
+    const members = [...new Set([...(sub.members||[]), uid])]
+    tx.update(ref, { [`subUnits.${subId}.members`]: members })
+  })
 }
 
 export async function unassignMember(db, cardId, unit, subId, uid) {
-  if(!subId || subId==='null') {
-    const newList = (unit.directMembers||[]).filter(id=>id!==uid)
-    await setDoc(doc(db,'cards',cardId,'units',unit.id), {directMembers:newList}, {merge:true})
-    return
-  }
-  const map = normalizeSubUnits(unit.subUnits)
-  const sub = map[subId]
-  if(!sub) return
-  const members = (sub.members||[]).filter(id=>id!==uid)
-  await updateDoc(doc(db,'cards',cardId,'units',unit.id), { [`subUnits.${subId}.members`]: members })
+  const ref = doc(db,'cards',cardId,'units',unit.id)
+  await runTransaction(db, async (tx) => {
+    const data = (await tx.get(ref)).data() || {}
+    if(!subId || subId==='null') {
+      const newList = (data.directMembers||[]).filter(id=>id!==uid)
+      tx.update(ref, { directMembers: newList })
+      return
+    }
+    const map = normalizeSubUnits(data.subUnits)
+    const sub = map[subId]
+    if(!sub) return
+    const members = (sub.members||[]).filter(id=>id!==uid)
+    tx.update(ref, { [`subUnits.${subId}.members`]: members })
+  })
 }

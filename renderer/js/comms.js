@@ -433,6 +433,14 @@ export async function joinChannel(chanId, ear='left') {
     C.activeChanIds.delete(chanId)
     txStream.getTracks().forEach(t=>t.stop())
     delete C.radioSlots[chanId]
+    // Same "no channels left, stop the mic" cleanup leaveChannel does below —
+    // a failed FIRST join used to skip this entirely, leaving the mic
+    // actively captured (and the meter running) with zero joined channels.
+    if (C.activeChanIds.size === 0 && C.localStream) {
+      C.localStream.getTracks().forEach(t=>t.stop())
+      C.localStream = null
+      stopMicMeter(hooks.micMeterRowEl?.(), hooks.micMeterBarEl?.())
+    }
     hooks.onChange?.()
     hooks.onVoiceJoinFailed?.()
   }
@@ -443,6 +451,11 @@ export async function joinChannel(chanId, ear='left') {
 function attachPeerAudio(chanId, peerId, remoteStream) {
   const slot = C.radioSlots[chanId]
   if (!slot) return
+  // Defense in depth against voice.js's onPeerLeave/ontrack ordering ever
+  // producing two attaches for the same peer without a detach in between —
+  // a plain Map.set here would silently orphan the previous source/gain/pan
+  // graph (still wired to ctx.destination) instead of replacing it.
+  if (slot.peerNodes.has(peerId)) detachPeerAudio(chanId, peerId)
   const ctx = getAudioCtx()
   if (ctx.state === 'suspended') ctx.resume().catch(()=>{}) // belt-and-suspenders vs. autoplay blocking
   const source = ctx.createMediaStreamSource(remoteStream)

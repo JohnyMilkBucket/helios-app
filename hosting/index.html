@@ -335,7 +335,7 @@ async function renderCardsList() {
   if(!cards.length) { $('cards-list').innerHTML = '<div class="notice">No cards yet — join one below with an invite code from your faction leader.</div>'; return }
   $('cards-list').innerHTML = cards.map(c => `
     <button class="btn" style="width:100%;margin-bottom:8px;text-align:left;display:flex;justify-content:space-between;align-items:center" onclick="enterCardFromList('${c.id}')">
-      <span>${c.name||'UNNAMED CARD'}</span>
+      <span>${escapeHtml(c.name||'UNNAMED CARD')}</span>
       ${c.id===S.cardId ? '<span style="font-size:9px;color:var(--green)">CURRENT</span>' : '<span style="font-size:9px;color:var(--accent)">SWITCH &rsaquo;</span>'}
     </button>
   `).join('')
@@ -495,14 +495,14 @@ function renderDashboard() {
     ${S.jointOp ? `
     <div class="panel" style="border-color:var(--amber)">
       <div class="label" style="color:var(--amber)">JOINT OP — ${(S.jointOp.opType||'JOINT OP').replace('_',' ')}</div>
-      <div style="font-size:14px;font-weight:700">${S.jointOp.name||'—'}</div>
+      <div style="font-size:14px;font-weight:700">${escapeHtml(S.jointOp.name||'—')}</div>
       <div style="font-size:10px;color:var(--accent);margin-top:6px">${S.jointOpParticipants.length} FACTION${S.jointOpParticipants.length===1?'':'S'} PARTICIPATING</div>
       ${S.jointOpCasualties.length ? `
         <div style="margin-top:8px;border-top:1px solid rgba(91,139,181,.15);padding-top:8px">
           <div style="font-size:9px;letter-spacing:.2em;color:var(--accent);margin-bottom:4px">SHARED CASUALTY BOARD</div>
           ${S.jointOpCasualties.map(c=>`
             <div class="patient-row">
-              <span>${c.username||c.uid} <span style="color:var(--accent)">(${c.faction||c.cardId})</span></span>
+              <span>${escapeHtml(c.username||c.uid)} <span style="color:var(--accent)">(${escapeHtml(c.faction||c.cardId)})</span></span>
               <span style="color:var(--redsoft)">${c.uncon?'UNCONSCIOUS':'DOWN'}</span>
             </div>`).join('')}
         </div>` : ''}
@@ -510,8 +510,8 @@ function renderDashboard() {
     <div class="panel">
       <div class="label">ACTIVE OPERATION</div>
       ${activeOp
-        ? `<div style="font-size:14px;font-weight:700">${activeOp.name}</div>
-           <div style="font-size:10.5px;color:#a8b8cc;margin-top:4px">${activeOp.objective||'No objective set'}</div>
+        ? `<div style="font-size:14px;font-weight:700">${escapeHtml(activeOp.name)}</div>
+           <div style="font-size:10.5px;color:#a8b8cc;margin-top:4px">${escapeHtml(activeOp.objective||'No objective set')}</div>
            <div style="font-size:10px;color:var(--accent);margin-top:6px">${activeOp.rosterCount||0} ROSTERED</div>`
         : `<div style="font-size:11px;color:var(--accent)">No active operation</div>`}
     </div>
@@ -520,7 +520,7 @@ function renderDashboard() {
       <div class="label">PAST OPERATIONS</div>
       ${pastOps.map(op=>`
         <div class="roster-row">
-          <span>${op.name}</span>
+          <span>${escapeHtml(op.name)}</span>
           <span style="color:var(--accent)">${op.rosterCount||0} rostered · ${S.events.filter(e=>e.type==='casualty'&&e.opId===op.id).length} casualties</span>
         </div>`).join('')}
     </div>` : ''}
@@ -528,15 +528,15 @@ function renderDashboard() {
       <div class="label">ROSTER — ${online}/${S.members.length} ONLINE</div>
       ${S.members.map(m=>`
         <div class="roster-row">
-          <span><span class="dot" style="background:${m.online?'var(--green)':'#4b5568'}"></span>${m.username||m.id}</span>
-          <span style="color:var(--accent)">${m.role||''}</span>
+          <span><span class="dot" style="background:${m.online?'var(--green)':'#4b5568'}"></span>${escapeHtml(m.username||m.id)}</span>
+          <span style="color:var(--accent)">${escapeHtml(m.role||'')}</span>
         </div>`).join('') || '<div style="font-size:11px;color:var(--accent)">No members</div>'}
     </div>
     <div class="panel">
       <div class="label">CASUALTIES — ${patients.length}</div>
       ${patients.length ? patients.map(p=>`
         <div class="patient-row">
-          <span><span class="dot" style="background:${p.dead?'#4b5568':p.uncon?'var(--amber)':'var(--red)'}"></span>${p.username||p.id}</span>
+          <span><span class="dot" style="background:${p.dead?'#4b5568':p.uncon?'var(--amber)':'var(--red)'}"></span>${escapeHtml(p.username||p.id)}</span>
           <span style="color:${p.dead?'#94a3b8':'var(--redsoft)'}">${p.dead?(DEATH_LABEL[p.deathCause]||'DECEASED'):p.uncon?'UNCONSCIOUS':'DOWN'}</span>
         </div>`).join('') : '<div style="font-size:11px;color:var(--accent)">No active casualties</div>'}
     </div>
@@ -559,7 +559,8 @@ function zoneStatus(zs) {
 }
 function renderMedicalView() {
   const el = $('view-medical')
-  if(!S.cardId || el.classList.contains('hidden')) { if(!S.cardId) return }
+  if(!S.cardId) return
+  if(el.classList.contains('hidden')) return
   const self = S.self
   const canTreatOthers = !!(S.member?.canTreatOthers || S.member?.isAdmin)
   const patients = Medical.getPatients()
@@ -593,7 +594,7 @@ function renderMedicalView() {
       <div class="label">PATIENTS — ${patients.length}</div>
       ${patients.length ? patients.map(p=>`
         <div class="patient-row">
-          <span>${p.username||p.id} ${p.dead?'— DECEASED':p.uncon?'— UNCONSCIOUS':''}</span>
+          <span>${escapeHtml(p.username||p.id)} ${p.dead?'— DECEASED':p.uncon?'— UNCONSCIOUS':''}</span>
           ${p.dead ? '' : `<button class="btn" style="font-size:9px;padding:7px 10px" onclick="openTreatSheet('patient','${p.id}')">TREAT</button>`}
         </div>`).join('') : '<div style="font-size:11px;color:var(--accent)">No patients need treatment</div>'}
     </div>` : ''}
@@ -645,7 +646,7 @@ function renderTreatSheet() {
   bg.addEventListener('click', e => { if(e.target===bg) closeTreatSheet() })
   bg.innerHTML = `
     <div class="modal-box" onclick="event.stopPropagation()">
-      <h3>TREAT — ${treatTarget.target==='self' ? 'MYSELF' : (obj.username||obj.id)}</h3>
+      <h3>TREAT — ${treatTarget.target==='self' ? 'MYSELF' : escapeHtml(obj.username||obj.id)}</h3>
       <div class="stat"><span>Blood</span><span>${Math.round(obj.bloodPct)}%</span></div>
       <div class="stat"><span>Heart Rate</span><span>${Math.round(obj.hr)} bpm${obj.overdosing?' — OVERDOSING':''}</span></div>
       <div style="margin:10px 0">
@@ -703,7 +704,7 @@ function renderOrgView() {
         const perms = [role.isAdmin&&'ADMIN', role.canTreatOthers&&'MEDIC', role.canCreateOps&&'OPS', role.canEditBrevity&&'BREVITY', role.canMultiChan&&'MULTI-CH'].filter(Boolean)
         return `<div style="padding:8px 0;border-bottom:1px solid rgba(91,139,181,.12)">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-weight:700;color:${role.color||'#e8eef5'}">${role.name}</span>
+            <span style="font-weight:700;color:${role.color||'#e8eef5'}">${escapeHtml(role.name)}</span>
             <span style="color:var(--accent);font-size:10px">${memberCount} MEMBER${memberCount===1?'':'S'}</span>
           </div>
           ${perms.length?`<div style="font-size:9px;color:var(--accent);margin-top:3px">${perms.join(' · ')}</div>`:''}
@@ -716,9 +717,9 @@ function renderOrgView() {
         const subs = getSubUnitList(u)
         const direct = (u.directMembers||[]).map(nameOf)
         return `<div style="margin-bottom:10px">
-          <div style="font-weight:700;color:${u.color||'#e8eef5'}">${u.name}</div>
-          ${direct.length?`<div style="font-size:10.5px;color:#a8b8cc;margin:3px 0 0 10px">${direct.join(', ')}</div>`:''}
-          ${subs.map(s=>`<div style="margin:4px 0 0 14px;font-size:10.5px"><span style="color:var(--accent)">&raquo; ${s.name}</span><div style="color:#a8b8cc;margin-left:10px">${s.members.map(nameOf).join(', ')||'—'}</div></div>`).join('')}
+          <div style="font-weight:700;color:${u.color||'#e8eef5'}">${escapeHtml(u.name)}</div>
+          ${direct.length?`<div style="font-size:10.5px;color:#a8b8cc;margin:3px 0 0 10px">${direct.map(escapeHtml).join(', ')}</div>`:''}
+          ${subs.map(s=>`<div style="margin:4px 0 0 14px;font-size:10.5px"><span style="color:var(--accent)">&raquo; ${escapeHtml(s.name)}</span><div style="color:#a8b8cc;margin-left:10px">${s.members.map(uid=>escapeHtml(nameOf(uid))).join(', ')||'—'}</div></div>`).join('')}
         </div>`
       }).join('') : '<div style="font-size:11px;color:var(--accent);text-align:center;padding:20px">No units created yet</div>'}
     </div>

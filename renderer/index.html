@@ -1237,7 +1237,7 @@ html.popout-mode #content{padding:10px 12px}
       <div style="margin-bottom:14px;padding:10px 12px;border:1px solid rgba(91,139,181,.25);background:rgba(91,139,181,.07)">
         <div class="orb" style="font-size:10px;color:var(--hi);margin-bottom:6px;letter-spacing:.1em">TREATMENTS</div>
         <div style="font-size:11px;color:#cdd9e8;line-height:1.9">
-          🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before it's fully packed — keep bandaging until it is. Even once packed, bleeding doesn't stop that instant: it keeps going a bit longer, scaled to the wound — 20s for a low velocity wound, 1 minute medium, 5 minutes high. 5s per try, 15s if fragmentation is present.<br>
+          🩹 <b style="color:var(--green)">Bandage</b> — Packs a wound. Worse wounds need more than one application before it's fully packed — keep bandaging until it is. Even once packed, bleeding doesn't stop that instant: it keeps going a bit longer, scaled to the wound — 20s for a low velocity wound, 30s medium, 40s high. A severe wound bandaged with no tourniquet backing it up is genuinely risky — get a TQ/seal on first if you can. 5s per try, 15s if fragmentation is present.<br>
           🟨 <b style="color:var(--amber)">Tourniquet</b> — Limbs only, never head/torso. Stops bleeding instantly (3s to apply). It doesn't numb the limb right away — past ~4 minutes it goes numb and becomes unusable (see INCAPACITATION below, you'll get a callout when it happens), and past ~6 minutes you lose the limb entirely.<br>
           🦴 <b style="color:#a78bfa">Splint</b> — Fixes a fracture. 6s.<br>
           💉 <b style="color:#34d399">Morphine</b> — Relieves pain on a wounded zone. Doesn't affect bleeding or anything else. 3s.<br>
@@ -1407,6 +1407,16 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.26', items:[
+    'Fixed the v1.4.25 bleed-stop timings — a severe wound bandaged alone was guaranteed fatal before the pack could finish. Retuned to 20s/30s/40s.',
+    'Fixed depressant\'s calming effect being fought/overwritten by an unrelated heart-rate ticker.',
+    'Bandage/morphine buttons no longer waste inventory when clicked with nothing left to do.',
+    'Fixed a background-ticker race that could silently revert a medic\'s treatment.',
+    'Fixed role/unit/sub-unit names with an apostrophe silently breaking their edit/delete buttons.',
+    'Fixed several places usernames/names weren\'t escaped before being displayed (security fix).',
+    'Fixed a failed voice-channel join leaving the mic open, and a leaked audio node on reconnect.',
+    'Fixed a possible lost assignment when two people were assigned to a unit/sub-unit at once.',
+  ]},
   { v:'1.4.25', items:[
     'Bandaged wounds keep bleeding for a bit after being packed (20s/1m/5m by severity) instead of stopping instantly.',
     'New treatment: Morphine — relieves pain on a wounded zone.',
@@ -1797,7 +1807,7 @@ async function renderMyCards() {
 
   wrap.innerHTML = cards.map(c => `
     <button class="card-option" onclick="switchToCard('${c.id}')" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer">
-      <span class="orb" style="font-size:12px;font-weight:700">${c.name||'UNNAMED CARD'}</span>
+      <span class="orb" style="font-size:12px;font-weight:700">${escapeHtml(c.name||'UNNAMED CARD')}</span>
       ${c.id===S.cardId ? '<span style="font-size:9px;color:var(--green);letter-spacing:.15em">CURRENT</span>' : '<span style="font-size:9px;color:var(--accent);letter-spacing:.15em">SWITCH ▸</span>'}
     </button>
   `).join('')
@@ -2275,7 +2285,7 @@ function renderORBAT() {
   if(uList) uList.innerHTML = unassigned.map(m => `
     <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid rgba(91,139,181,.2);background:rgba(12,22,42,.6)">
       <span class="dot" style="background:${m.online?'#4ade80':'#3a4a5a'}"></span>
-      <span style="font-size:10px;color:${m.color||'var(--hi)'};font-weight:700">${m.username||m.callsign||m.id}</span>
+      <span style="font-size:10px;color:${m.color||'var(--hi)'};font-weight:700">${escapeHtml(m.username||m.callsign||m.id)}</span>
       ${roleAssignSelect(m)}
     </div>
   `).join('')
@@ -2293,13 +2303,13 @@ function renderORBAT() {
       <div style="padding:12px 14px;border-bottom:1px solid rgba(91,139,181,.15);display:flex;align-items:center;gap:10px;background:rgba(8,18,34,.4)">
         <div style="width:4px;height:36px;background:${u.color||'#8db3d4'};flex-shrink:0"></div>
         <div style="flex:1">
-          <div class="orb" style="font-size:13px;font-weight:700;color:${u.color||'#e8eef5'};letter-spacing:.1em">${u.name}</div>
+          <div class="orb" style="font-size:13px;font-weight:700;color:${u.color||'#e8eef5'};letter-spacing:.1em">${escapeHtml(u.name)}</div>
           <div style="font-size:9px;color:var(--accent);margin-top:2px">${getSubUnitList(u).length} SUB-UNITS · ${directMembers.length} DIRECT</div>
         </div>
         ${S.member?.isAdmin ? `
           <button onclick="showAssignMember('${u.id}',null)" class="btn" style="font-size:9px;padding:3px 8px">+ ASSIGN</button>
           <button onclick="showAddSubUnit('${u.id}')" class="btn btn-green" style="font-size:9px;padding:3px 8px">+ SUB-UNIT</button>
-          <button onclick="confirmDeleteUnit('${u.id}','${u.name}')" style="background:none;border:1px solid rgba(239,68,68,.35);color:var(--redsoft);cursor:pointer;font-size:9px;padding:3px 8px;-webkit-app-region:no-drag">✕ DELETE</button>
+          <button onclick="confirmDeleteUnit('${u.id}','${escJsAttr(u.name)}')" style="background:none;border:1px solid rgba(239,68,68,.35);color:var(--redsoft);cursor:pointer;font-size:9px;padding:3px 8px;-webkit-app-region:no-drag">✕ DELETE</button>
         ` : ''}
       </div>
 
@@ -2321,11 +2331,11 @@ function renderORBAT() {
             return `
             <div style="border:1px solid rgba(91,139,181,.15);background:rgba(8,18,34,.3)">
               <div style="padding:7px 10px;border-bottom:1px solid rgba(91,139,181,.1);display:flex;align-items:center;gap:8px">
-                <div style="font-size:9px;font-weight:700;color:var(--hi);letter-spacing:.1em;flex:1">${s.name}</div>
+                <div style="font-size:9px;font-weight:700;color:var(--hi);letter-spacing:.1em;flex:1">${escapeHtml(s.name)}</div>
                 <div style="font-size:9px;color:var(--accent)">${subMembers.length} ASSIGNED</div>
                 ${S.member?.isAdmin ? `
                   <button onclick="showAssignMember('${u.id}','${s.id}')" class="btn" style="font-size:8px;padding:2px 7px">+ ASSIGN</button>
-                  <button onclick="confirmDeleteSubUnit('${u.id}','${s.id}','${s.name}')" style="background:none;border:1px solid rgba(239,68,68,.3);color:var(--redsoft);cursor:pointer;font-size:8px;padding:2px 7px;-webkit-app-region:no-drag">✕</button>
+                  <button onclick="confirmDeleteSubUnit('${u.id}','${s.id}','${escJsAttr(s.name)}')" style="background:none;border:1px solid rgba(239,68,68,.3);color:var(--redsoft);cursor:pointer;font-size:8px;padding:2px 7px;-webkit-app-region:no-drag">✕</button>
                 ` : ''}
               </div>
               <div style="padding:7px 10px;display:flex;flex-wrap:wrap;gap:5px;min-height:32px">
@@ -2348,7 +2358,7 @@ function memberChip(m, unitId, subId) {
   return `
     <div style="display:flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid ${m.color||'rgba(91,139,181,.3)'};background:${m.color||'#8db3d4'}14">
       <span class="dot" style="background:${m.online?'#4ade80':'#3a4a5a'}"></span>
-      <span style="font-size:10px;font-weight:700;color:${m.color||'var(--hi)'}">${m.username||m.callsign||m.id}</span>
+      <span style="font-size:10px;font-weight:700;color:${m.color||'var(--hi)'}">${escapeHtml(m.username||m.callsign||m.id)}</span>
       ${roleAssignSelect(m)}
       ${S.member?.isAdmin ? `
         <button
@@ -2369,7 +2379,7 @@ function roleAssignSelect(m) {
   return `<select onchange="changeRole('${(m.id||'').replace(/'/g,'')}',this.value)" class="inp inp-sm"
       style="font-size:9px;padding:1px 4px;width:auto;max-width:110px;-webkit-app-region:no-drag">
       ${getEffectiveRoles().map(r=>
-        `<option value="${r.name}" ${m.role===r.name?'selected':''}>${r.name}</option>`
+        `<option value="${escapeHtml(r.name)}" ${m.role===r.name?'selected':''}>${escapeHtml(r.name)}</option>`
       ).join('')}
     </select>`
 }
@@ -2408,7 +2418,7 @@ function assignRow(m, unitId, subId) {
       class="assign-row" data-name="${(m.username||m.callsign||'').toLowerCase()}">
       <span class="dot" style="background:${m.online?'#4ade80':'#3a4a5a'}"></span>
       <div style="flex:1">
-        <div style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'}">${m.username||m.callsign||m.id}</div>
+        <div style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'}">${escapeHtml(m.username||m.callsign||m.id)}</div>
         <div style="font-size:9px;color:var(--accent)">${m.role||'OPERATOR'}</div>
       </div>
     </div>`
@@ -2473,7 +2483,7 @@ window.filterOpPlayers = () => {
         onmouseover="this.style.background='rgba(91,139,181,.12)'" onmouseout="this.style.background='none'">
         <span class="dot" style="background:${m.online?'#4ade80':'#3a4a5a'}"></span>
         <div style="flex:1">
-          <div style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'}">${m.username||m.callsign||m.id}</div>
+          <div style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'}">${escapeHtml(m.username||m.callsign||m.id)}</div>
           <div style="font-size:9px;color:var(--accent)">${m.role||'OPERATOR'} ${getUnitLabel(m.uid||m.id)}</div>
         </div>
       </div>
@@ -2511,7 +2521,7 @@ function renderOpRoster() {
     <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid rgba(91,139,181,.2);background:rgba(8,18,34,.4)">
       <span class="dot" style="background:${m.online?'#4ade80':'#3a4a5a'}"></span>
       <div style="flex:1">
-        <span style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'}">${m.username||m.callsign||m.id}</span>
+        <span style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'}">${escapeHtml(m.username||m.callsign||m.id)}</span>
         <span style="font-size:9px;color:var(--accent);margin-left:7px">${m.role||'OPERATOR'}</span>
         <span style="font-size:9px;color:var(--accent)">${getUnitLabel(m.uid||m.id)}</span>
       </div>
@@ -2551,7 +2561,7 @@ function renderUnits() {
       <div class="unit-row" onclick="toggleUnitEl('u-${u.id}','uc-${u.id}')">
         <svg id="uc-${u.id}" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#8db3d4" stroke-width="2" style="transition:transform .15s"><polyline points="9 18 15 12 9 6"/></svg>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="${u.color||'#8db3d4'}" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span style="flex:1;font-size:12px;color:${u.color||'#e8eef5'}">${u.name}</span>
+        <span style="flex:1;font-size:12px;color:${u.color||'#e8eef5'}">${escapeHtml(u.name)}</span>
         ${S.member?.isAdmin?`
           <button onclick="event.stopPropagation();showAddSubUnit('${u.id}')" style="background:none;border:none;cursor:pointer;color:var(--green);font-size:11px;padding:2px 4px;-webkit-app-region:no-drag" title="Add sub-unit">+</button>
           <button onclick="event.stopPropagation();deleteUnit('${u.id}')" style="background:none;border:none;cursor:pointer;color:rgba(239,68,68,.5);font-size:11px;padding:2px 4px;-webkit-app-region:no-drag" title="Delete unit">✕</button>
@@ -2561,7 +2571,7 @@ function renderUnits() {
         ${subs.length ? subs.map(s=>`
           <div style="display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:11px;color:#a8b8cc">
             <span style="color:var(--accent)">▸</span>
-            <span style="flex:1">${s.name}</span>
+            <span style="flex:1">${escapeHtml(s.name)}</span>
             ${S.member?.isAdmin?`<button onclick="deleteSubUnit('${u.id}','${s.id}')" style="background:none;border:none;cursor:pointer;color:rgba(239,68,68,.4);font-size:10px;-webkit-app-region:no-drag">✕</button>`:''}
           </div>
         `).join('') : '<div style="font-size:10px;color:var(--accent);padding:4px 2px">No sub-units</div>'}
@@ -2702,7 +2712,7 @@ function renderMembers() {
         <div style="display:flex;align-items:center;gap:6px;padding:3px 2px;margin-bottom:1px">
           <span class="dot" style="background:${m.online?'#4ade80':'#5b8bb5'}"></span>
           <div style="flex:1;min-width:0">
-            <div style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${m.color||'#e8eef5'}">${m.username||m.callsign||m.id}</div>
+            <div style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${m.color||'#e8eef5'}">${escapeHtml(m.username||m.callsign||m.id)}</div>
             ${unit ? `<div style="font-size:8px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${unit}</div>` : ''}
           </div>
           ${S.patients.find(p=>p.id===m.uid) ? '<span style="font-size:10px;color:var(--red)">⚕</span>' : ''}
@@ -2731,8 +2741,8 @@ function renderOps() {
           ${op.status==='active'
             ?`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="dot" style="background:var(--green);animation:bpulse 2s ease-in-out infinite"></span><span style="font-size:9px;letter-spacing:.3em;color:var(--green)">ACTIVE</span></div>`
             :`<div style="font-size:9px;letter-spacing:.3em;color:var(--accent);margin-bottom:4px">ARCHIVED</div>`}
-          <div class="orb" style="font-size:14px;font-weight:700;letter-spacing:.1em;margin-bottom:3px">${op.name}</div>
-          <div style="font-size:11px;color:#a8b8cc;margin-bottom:8px;line-height:1.5">${op.objective||''}</div>
+          <div class="orb" style="font-size:14px;font-weight:700;letter-spacing:.1em;margin-bottom:3px">${escapeHtml(op.name)}</div>
+          <div style="font-size:11px;color:#a8b8cc;margin-bottom:8px;line-height:1.5">${escapeHtml(op.objective||'')}</div>
           <div style="font-size:9px;color:var(--accent)">${op.createdAt?.toDate?.().toLocaleDateString()||''} · ${op.rosterCount||0} ROSTERED · ${S.events.filter(e=>e.type==='casualty'&&e.opId===op.id).length} CASUALTIES</div>
         </div>
         ${S.member?.isAdmin||S.member?.canCreateOps ? `
@@ -2847,7 +2857,7 @@ function renderNets() {
     <div class="net-card ${active?'active':''}" onclick="handleNetClick('${ch.id}')"
       style="border-left-color:${active ? earColor : 'rgba(91,139,181,.22)'}">
       <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-        <div class="orb" style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.name}</div>
+        <div class="orb" style="font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ch.name)}</div>
         <span style="font-size:9px;color:${active?'var(--green)':'var(--accent)'}">
           ${active ? '◉ '+(ear==='right'?'RIGHT':'LEFT') : full ? 'LOCKED' : 'JOIN'}
         </span>
@@ -2896,7 +2906,7 @@ function renderChanMembers() {
       <div style="display:flex;align-items:center;gap:7px;padding:6px 5px;margin-bottom:2px">
         <div style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;border:1px solid ${m.color||'var(--accent)'};background:${m.color||'var(--accent)'}14;color:${m.color||'var(--hi)'};flex-shrink:0">${(m.username||m.callsign||'??').slice(0,2)}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.username||m.callsign||uid}${you?'<span style="font-size:8px;color:var(--accent);margin-left:3px">(YOU)</span>':''}</div>
+          <div style="font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.username||m.callsign||uid)}${you?'<span style="font-size:8px;color:var(--accent);margin-left:3px">(YOU)</span>':''}</div>
           <div style="font-size:8px;color:${m.color||'var(--accent)'}">${m.role||'OPERATOR'}</div>
         </div>
         ${badges}
@@ -3027,14 +3037,14 @@ function renderRoles() {
           ${(role.name||'??').slice(0,2)}
         </div>
         <div style="flex:1;min-width:0">
-          <div class="orb" style="font-size:12px;font-weight:700;color:${role.color||'var(--hi)'};letter-spacing:.1em">${role.name}</div>
+          <div class="orb" style="font-size:12px;font-weight:700;color:${role.color||'var(--hi)'};letter-spacing:.1em">${escapeHtml(role.name)}</div>
           <div style="font-size:9px;color:var(--accent);margin-top:2px">
             ${memberCount} MEMBER${memberCount!==1?'S':''}
             ${permsDisplay.length ? ' · '+permsDisplay.join(' · ') : ''}
           </div>
         </div>
         ${isAdmin ? `
-          <button onclick="editRolePerms('${role.name}')" class="btn" style="font-size:9px;padding:3px 8px;margin-right:3px">⚙ EDIT</button>
+          <button onclick="editRolePerms('${escJsAttr(role.name)}')" class="btn" style="font-size:9px;padding:3px 8px;margin-right:3px">⚙ EDIT</button>
           ${role.id && !role.id.startsWith('member-') ? `<button onclick="deleteRole('${role.id}')" style="background:none;border:none;color:rgba(239,68,68,.5);cursor:pointer;font-size:14px;-webkit-app-region:no-drag">✕</button>` : ''}
           <div style="display:flex;flex-direction:column;gap:2px;margin-left:4px">
             <button onclick="moveRole('${role.id}','up')" style="background:none;border:1px solid rgba(91,139,181,.25);color:var(--hi);cursor:pointer;font-size:8px;padding:1px 5px;line-height:1.2;-webkit-app-region:no-drag">▲</button>
@@ -3050,7 +3060,7 @@ function renderRoles() {
               ${it.ico}
               ${isAdmin
                 ? `<input type="number" min="0" max="99" value="${ld[it.k]||0}"
-                    onchange="updateRoleLoadoutByName('${role.name}',this)"
+                    onchange="updateRoleLoadoutByName('${escJsAttr(role.name)}',this)"
                     data-key="${it.k}"
                     style="width:100%;text-align:center;padding:2px 0;font-size:11px;
                       background:rgba(8,18,36,.8);border:1px solid ${it.color};
@@ -3117,7 +3127,7 @@ window.editRolePerms = (roleName) => {
               </label>
             </div>
           `).join('')}
-          <button class="btn btn-green" onclick="saveRolePerms('${roleName}')" style="width:100%;padding:10px;font-size:10px;letter-spacing:.22em;margin-top:4px">SAVE PERMISSIONS ▸</button>
+          <button class="btn btn-green" onclick="saveRolePerms('${escJsAttr(roleName)}')" style="width:100%;padding:10px;font-size:10px;letter-spacing:.22em;margin-top:4px">SAVE PERMISSIONS ▸</button>
         </div>
       </div>
     </div>
@@ -3749,6 +3759,8 @@ window.startApply = (zone, treatment, target) => {
   // too, in case a stale render or a race ever leaves the old button live.
   if(treatment==='tourniquet' && zs?.tq) { blockTreatment('Already has a tourniquet on') ; return }
   if(treatment==='chest_seal' && zs?.chestSeal) { blockTreatment('Already has a chest seal on') ; return }
+  if(treatment==='bandage' && zs?.bandaged) { blockTreatment('Wound is already fully packed') ; return }
+  if(treatment==='morphine' && !zs?.pain) { blockTreatment('No pain to relieve here') ; return }
   if(treatment==='splint' && !zs?.fracture) { blockTreatment('No fracture on this zone — nothing to splint') ; return }
   if(treatment==='unpack_bandage' && !(zs?.bandagesApplied>0)) { blockTreatment('No bandages on this zone to unpack') ; return }
   const woundExposed = (zs?.bandagesApplied||0)===0 && !zs?.chestSeal
@@ -3898,11 +3910,17 @@ function startTickers() {
       return
     }
     // During an overdose, HR is owned entirely by the ramp ticker in
-    // medical.js (climbing toward cardiac arrest) — this ticker only
-    // renders it in that state instead of also computing/drifting it, so
-    // the two never fight over the same field the way the old inline
-    // listener and treatment writes once did.
-    if(!S.self.overdosing) {
+    // medical.js (climbing toward cardiac arrest); while a depressant's
+    // gradual settle is in progress (hrTarget set), it's owned by the
+    // settle ticker (drifting toward hrTarget) — this ticker only renders
+    // hr in either state instead of also computing/drifting it, so nothing
+    // fights over the same field. This used to only check `overdosing`;
+    // once the settle ticker was added, a depressant's hrTarget-driven
+    // glide was getting overwritten by this ticker's own base-seeking
+    // smoothing on the very next 600ms tick (which converges roughly 3x
+    // faster than the settle ticker steps), so the depressant's calming
+    // effect never actually became visible.
+    if(!S.self.overdosing && S.self.hrTarget==null) {
       let base=78
       if(S.self.down) base=S.self.uncon?145:110
       if(S.self.bloodPct<40) base+=32
@@ -4664,8 +4682,8 @@ function renderJoFreqs(freqs) {
     <div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border:1px solid rgba(91,139,181,.2);background:rgba(8,18,34,.4)">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--hi)" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
       <div style="flex:1">
-        <div class="orb" style="font-size:11px;font-weight:700;color:var(--hi)">${f.name}</div>
-        <div style="font-size:9px;color:var(--accent)">${f.freq} MHz · ${f.purpose||'JOINT NET'}</div>
+        <div class="orb" style="font-size:11px;font-weight:700;color:var(--hi)">${escapeHtml(f.name)}</div>
+        <div style="font-size:9px;color:var(--accent)">${escapeHtml(f.freq)} MHz · ${escapeHtml(f.purpose||'JOINT NET')}</div>
       </div>
       ${JO.isHost ? `<button onclick="removeJoFreq(${i})" style="background:none;border:none;color:rgba(239,68,68,.5);cursor:pointer;font-size:13px;-webkit-app-region:no-drag">✕</button>` : ''}
     </div>
@@ -4743,8 +4761,8 @@ function renderJoCasualties(cas) {
   el.innerHTML = cas.map(c => `
     <div style="padding:7px 9px;border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.06);display:flex;align-items:center;gap:8px">
       <div style="flex:1">
-        <div style="font-size:11px;font-weight:700;color:var(--redsoft)">${c.username||c.id}</div>
-        <div style="font-size:9px;color:var(--accent)">${c.faction||'UNKNOWN FACTION'} · ${c.role||'OPERATOR'}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--redsoft)">${escapeHtml(c.username||c.id)}</div>
+        <div style="font-size:9px;color:var(--accent)">${escapeHtml(c.faction||'UNKNOWN FACTION')} · ${escapeHtml(c.role||'OPERATOR')}</div>
       </div>
       <div style="font-size:10px;color:${c.bloodPct<40?'var(--red)':c.bloodPct<70?'var(--amber)':'var(--green)'}">${Math.round(c.bloodPct||100)}% BLOOD</div>
     </div>
@@ -4849,7 +4867,7 @@ function renderAdminMembers() {
     <div style="border:1px solid rgba(91,139,181,.2);background:rgba(8,18,34,.4);padding:10px 12px">
       <div style="display:flex;align-items:center;gap:8px">
         <span class="dot" style="background:${m.online?'#4ade80':'#3a4a5a'}"></span>
-        <div class="orb" style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'};flex:1">${m.username||m.callsign||m.id}</div>
+        <div class="orb" style="font-size:11px;font-weight:700;color:${m.color||'var(--hi)'};flex:1">${escapeHtml(m.username||m.callsign||m.id)}</div>
         <div style="font-size:9px;color:${m.color||'var(--accent)'};border:1px solid ${m.color||'var(--border)'};padding:2px 7px">${m.role||'OPERATOR'}</div>
         ${m.uid!==S.user?.uid?`
           <button onclick="kickMember('${m.id}')" class="btn btn-red" style="font-size:9px;padding:3px 8px">KICK</button>
@@ -4943,7 +4961,7 @@ window.showSelfDemoteConfirm = (memberId, newRole, hasOtherOwner) => {
           <div style="display:flex;gap:8px">
             <button onclick="document.getElementById('self-demote-modal').remove();sfx('click')"
               class="btn" style="flex:1;padding:9px;font-size:10px;letter-spacing:.15em">CANCEL</button>
-            <button onclick="applyRoleChange('${memberId}','${newRole}');document.getElementById('self-demote-modal').remove()"
+            <button onclick="applyRoleChange('${memberId}','${escJsAttr(newRole)}');document.getElementById('self-demote-modal').remove()"
               class="btn btn-red" style="flex:1;padding:9px;font-size:10px;letter-spacing:.15em">CONFIRM</button>
           </div>
         </div>
@@ -4976,6 +4994,22 @@ window.saveCardName = async () => {
 // inviteCode — no separate subscription needed.
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
+
+// For interpolating user-controlled text into onclick="fn('${...}')" style
+// handlers (role/unit/sub-unit names, addressed by name not doc id in a few
+// places). escapeHtml alone doesn't fix this: the browser HTML-decodes the
+// attribute value BEFORE handing it to the JS parser, so encoding a quote
+// as &#39; just decodes back to a real ' and breaks the string literal the
+// same way an unescaped one would. This does both layers: JS-string-escape
+// first (so the value can't break out of the '...' literal), then
+// HTML-attribute-escape the result (so it can't break out of the
+// onclick="..." attribute either). A name like O'Brien used to silently
+// kill that role's EDIT/DELETE buttons — clicking threw a JS syntax error
+// with no visible feedback.
+function escJsAttr(s) {
+  const js = String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+  return js.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')
 }
 
 function renderRulesTab() {

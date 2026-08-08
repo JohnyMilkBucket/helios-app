@@ -3,6 +3,48 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.26
+- Full bug-hunt pass across the whole app (desktop, mobile, Cloud Functions,
+  security rules, admin panel). Fixes:
+  - **Corrected the v1.4.25 bleed-stop-after-bandaging timings.** The
+    original 20s/1m/5m delays didn't account for how fast this game's
+    bleed rates actually are — a severe (tier 3) wound bleeds out in 50
+    seconds on its own, so a 5-minute delay made bandaging one, alone,
+    with no tourniquet/chest-seal, unconditionally fatal every time,
+    250 seconds before the pack could ever finish. Retuned to 20s/30s/40s,
+    which keeps "worse wound takes longer" but caps the risk instead of
+    guaranteeing death.
+  - Fixed a new gradual-HR bug: a pre-existing ambient heart-rate ticker
+    (desktop only) was fighting the new depressant settle-ticker over the
+    same field, so a depressant's calming effect barely showed up before
+    getting overwritten. The ambient ticker now steps aside while a settle
+    is in progress, same as it already did for overdoses.
+  - BANDAGE and MORPHINE buttons could be clicked repeatedly with no
+    effect except wasting inventory — re-bandaging an already-packed wound
+    also reset its bleed-stop countdown back to the full delay each time.
+    Both are now blocked once there's nothing left to do.
+  - The tourniquet/chest-seal and bleed-stop background tickers wrote a
+    stale full copy of a zone back to Firestore, which could silently
+    revert a medic's treatment landing at the same moment. They now patch
+    only the specific fields they actually changed.
+  - Role/unit/sub-unit names containing an apostrophe silently broke that
+    item's edit/delete/loadout buttons (malformed onclick handler, no
+    visible error).
+  - Usernames, operation/role/unit/channel names, and joint-op data were
+    injected into the page unescaped in several places on both desktop and
+    mobile — a malicious name could run script in another member's
+    session. All now properly escaped.
+  - A failed first voice-channel join could leave the microphone captured
+    with zero channels joined.
+  - A dropped/retried voice connection could leak an orphaned audio node
+    on the answering side.
+  - ORBAT: assigning members directly to a unit (not a sub-unit), or two
+    people assigned to the same sub-unit at once, could silently drop one
+    assignment — now goes through a transaction like the rest of ORBAT
+    already does.
+  - A new card's starting role was missing a real 0 for the chest seal
+    loadout slot (server-side default).
+
 ## v1.4.25
 - Bandaging a wound no longer stops the bleeding the instant it's packed —
   it keeps bleeding at its normal rate for a bit longer, scaled to the

@@ -166,10 +166,16 @@ export async function joinChannel(cardId, chanId, callbacks = {}, stream) {
 
   async function handleOffer(peerId, signal) {
     // If we still have a (now-dead) connection from this peer's previous
-    // attempt, drop it before building the replacement.
+    // attempt, drop it before building the replacement. Unlike closePeer()/
+    // scheduleRetry(), this used to skip onPeerLeave — the caller's
+    // per-peer WebAudio nodes (comms.js attachPeerAudio) never got
+    // disconnected, and the next ontrack just overwrote the Map entry on
+    // top of them, leaking one orphaned source/gain/pan graph per
+    // reconnect on the answering side.
     if (peers.has(peerId)) {
       try { peers.get(peerId).pc.close() } catch (e) {}
       peers.delete(peerId)
+      onPeerLeave?.(peerId)
     }
     const pc = createPeerConnection(peerId, false)
     await pc.setRemoteDescription({ type: 'offer', sdp: signal.sdp })

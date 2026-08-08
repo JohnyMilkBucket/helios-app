@@ -49,8 +49,10 @@ export const INJ = {
   BLEED_HIGH: { name:'High Velocity Wound',   color:'#991b1b', tier:3, bleedRate:2 },
 }
 export const BANDAGES_NEEDED = {1:1, 2:2, 3:3}
-// See renderer/js/medical.js — packing doesn't stop bleeding instantly.
-export const BLEED_STOP_MS = {1:20000, 2:60000, 3:5*60*1000}
+// See renderer/js/medical.js — packing doesn't stop bleeding instantly,
+// and these are capped against each tier's bleedRate so bandaging a
+// severe wound alone stays survivable instead of guaranteed-fatal.
+export const BLEED_STOP_MS = {1:20000, 2:30000, 3:40000}
 export const FRAG_INFO = { name:'Fragmentation', color:'#f97316' }
 export const APPLY_MS = {
   bandage_bleed:5000, bandage_frag:15000, unpack_bandage:4000,
@@ -77,14 +79,15 @@ export function randFindFragMs() {
   return FIND_FRAG_MIN_MS + Math.random()*(FIND_FRAG_MAX_MS-FIND_FRAG_MIN_MS)
 }
 
-// Stim overdose — one dose kicks HR up to OD_START_HR and it climbs
-// OD_CLIMB_RATE bpm/sec from there (checked once per second by the ramp
-// ticker in startMedicalTickers) until it crosses OD_ARREST_HR, which is
-// cardiac arrest. At the base rate that's OD_START_HR to OD_ARREST_HR in
-// ~27s. Each additional dose taken while already overdosing doesn't restart
-// the ramp from OD_START_HR — it stacks onto odStacks, which multiplies the
-// climb rate (OD_STACK_MULT extra per stack beyond the first), so stacking
-// doses makes arrest arrive faster, not just "sooner started."
+// Stim overdose — one dose starts HR climbing from wherever it already is
+// (no snap to a fixed starting point) at OD_CLIMB_RATE bpm/sec, checked once
+// per second by the ramp ticker in startMedicalTickers, until it crosses
+// OD_ARREST_HR, which is cardiac arrest. Each additional dose taken while
+// already overdosing doesn't touch hr directly — it stacks onto odStacks,
+// which multiplies the climb rate (OD_STACK_MULT extra per stack beyond the
+// first), so stacking doses makes arrest arrive faster, not just "sooner
+// started." OD_START_HR is unused by the ramp itself now (kept as a
+// reference/typical-onset value) — see applyStimTo.
 export const OD_START_HR = 200
 export const OD_ARREST_HR = 280
 export const OD_CLIMB_RATE = 3
@@ -163,12 +166,12 @@ export function removeChestSealFromZone(zs) {
 }
 
 // Unconscious -> stim wakes them up clean, no risk. Conscious -> stim starts
-// (or stacks onto) an overdose: HR jumps to OD_START_HR on the first dose,
-// then climbs every second via the ramp ticker in startMedicalTickers until
-// it crosses OD_ARREST_HR — cardiac arrest, not an instant roll. A second
-// dose taken while already overdosing doesn't re-jump HR back down to
-// OD_START_HR (it's already above that) — it just adds to odStacks, which
-// the ticker uses to climb faster.
+// (or stacks onto) an overdose: HR climbs gradually — OD_CLIMB_RATE bpm/sec,
+// checked every second by the ramp ticker in startMedicalTickers — starting
+// from whatever HR the patient already had, not a snap to a fixed number,
+// until it crosses OD_ARREST_HR (cardiac arrest, not an instant roll). A
+// second dose taken while already overdosing doesn't touch hr directly at
+// all — it just adds to odStacks, which the ticker uses to climb faster.
 export function applyStimTo(obj) {
   if(obj.uncon) {
     obj.uncon=false; obj.overdosing=false; obj.odStacks=0; obj.hr=95; obj.hrTarget=null
@@ -494,14 +497,18 @@ export function startMedicalTickers(hooks) {
       if(tqMs >= TQ_LOSS_MS) {
         s.limbLost = true
         s.bleeding = false // nothing left to bleed
-        upd[`zones.${z}`] = s
+        // Deep dot-path per changed field, not the whole zone object — see
+        // renderer/js/medical.js (a medic's transaction on this same zone
+        // could be fresher than this ticker's local M.self.zones copy).
+        upd[`zones.${z}.limbLost`] = true
+        upd[`zones.${z}.bleeding`] = false
         changed = true
         hooks.onLimbLost?.(z)
       } else if(!s.tqNumb && tqMs >= TQ_WARN_MS) {
         // Circulation loss just caught up to this limb — it goes numb and
         // becomes unusable, distinct from (and well before) losing it outright.
         s.tqNumb = true
-        upd[`zones.${z}`] = s
+        upd[`zones.${z}.tqNumb`] = true
         changed = true
         hooks.onLimbNumb?.(z)
       }
@@ -519,7 +526,7 @@ export function startMedicalTickers(hooks) {
         return
       } else if(!ts.chestSealFailing && sealMs >= TQ_WARN_MS) {
         ts.chestSealFailing = true
-        upd['zones.torso'] = ts
+        upd['zones.torso.chestSealFailing'] = true
         changed = true
         hooks.onChestSealFailing?.()
       }
@@ -545,7 +552,8 @@ export function startMedicalTickers(hooks) {
       if(s?.bandaged && s.bleeding && s.bleedStopAt && Date.now()>=s.bleedStopAt) {
         s.bleeding = false
         s.bleedStopAt = null
-        stopUpd[`zones.${z}`] = s
+        stopUpd[`zones.${z}.bleeding`] = false
+        stopUpd[`zones.${z}.bleedStopAt`] = null
         stopChanged = true
       }
     }
