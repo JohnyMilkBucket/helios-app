@@ -3,6 +3,13 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.22
+- A limb that's gone (tourniquet left on too long) now shows translucent
+  black on the body map instead of grey.
+- A chest seal left unpacked too long is now fatal (CHEST SEAL FAILURE)
+  instead of just failing and resuming bleeding — a torso can't "lose a
+  limb," so the consequence of ignoring it that long is death instead.
+
 ## v1.4.21
 - Big Medical update:
   - A packed/bled-out-controlled wound now shows yellow on the body map

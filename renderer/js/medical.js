@@ -563,18 +563,19 @@ export function startMedicalTickers(hooks) {
       }
     }
     // Chest seal — same clock as a limb TQ, but there's no "lose the torso"
-    // endpoint. Left unpacked past TQ_LOSS_MS, the seal just fails outright:
-    // bleeding resumes and it needs a fresh seal, same as pulling a TQ that
-    // was never backed up by a bandage.
+    // the way a limb gets lost. Left unpacked past TQ_LOSS_MS, it's fatal
+    // instead — an unaddressed chest wound that long is a collapsed lung,
+    // not something that just "goes back to bleeding."
     const ts = M.self.zones.torso
     if(ts?.chestSeal && !ts.bandaged && ts.chestSealAppliedAt) {
       const sealMs = Date.now()-ts.chestSealAppliedAt
       if(sealMs >= TQ_LOSS_MS) {
-        ts.chestSeal = false; ts.chestSealAppliedAt = null; ts.chestSealFailing = false
-        ts.bleeding = !!ts.inj
-        upd['zones.torso'] = ts
-        changed = true
-        hooks.onChestSealFailed?.()
+        M.self.dead = true; M.self.deathCause = 'chest_seal_failure'; M.self.uncon = true; M.self.hr = 0
+        hooks.onChestSealDeath?.()
+        await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
+          dead:true, deathCause:'chest_seal_failure', uncon:true, hr:0, updatedAt:serverTimestamp()
+        },{merge:true})
+        return
       } else if(!ts.chestSealFailing && sealMs >= TQ_WARN_MS) {
         ts.chestSealFailing = true
         upd['zones.torso'] = ts

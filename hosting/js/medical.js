@@ -490,16 +490,17 @@ export function startMedicalTickers(hooks) {
         hooks.onLimbNumb?.(z)
       }
     }
-    // Chest seal — see renderer/js/medical.js for the full reasoning.
+    // Chest seal — fatal if left unpacked too long, see renderer/js/medical.js.
     const ts = M.self.zones.torso
     if(ts?.chestSeal && !ts.bandaged && ts.chestSealAppliedAt) {
       const sealMs = Date.now()-ts.chestSealAppliedAt
       if(sealMs >= TQ_LOSS_MS) {
-        ts.chestSeal = false; ts.chestSealAppliedAt = null; ts.chestSealFailing = false
-        ts.bleeding = !!ts.inj
-        upd['zones.torso'] = ts
-        changed = true
-        hooks.onChestSealFailed?.()
+        M.self.dead = true; M.self.deathCause = 'chest_seal_failure'; M.self.uncon = true; M.self.hr = 0
+        hooks.onChestSealDeath?.()
+        await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
+          dead:true, deathCause:'chest_seal_failure', uncon:true, hr:0, updatedAt:serverTimestamp()
+        },{merge:true})
+        return
       } else if(!ts.chestSealFailing && sealMs >= TQ_WARN_MS) {
         ts.chestSealFailing = true
         upd['zones.torso'] = ts

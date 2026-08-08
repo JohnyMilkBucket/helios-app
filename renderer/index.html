@@ -1407,6 +1407,10 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.22', items:[
+    'Lost limbs now show translucent black instead of grey.',
+    'A chest seal left unpacked too long is now fatal (CHEST SEAL FAILURE) instead of just resuming bleeding.',
+  ]},
   { v:'1.4.21', items:[
     'Big Medical update: yellow (not red) once a wound is packed/controlled, blocky redesigned body map with real TQ/chest-seal overlays, new chest seals, bandage unpacking with a visible count, and fragmentation search + removal.',
   ]},
@@ -3277,7 +3281,9 @@ window.toggleDown = async () => {
 function zoneColors(zones, z) {
   const s = zones[z]
   if(!s) return {fill:'rgba(91,139,181,0.1)',stroke:'rgba(91,139,181,0.38)'}
-  if(s.limbLost)  return {fill:'rgba(107,114,128,.35)',stroke:'#374151'}
+  // No longer operable — a translucent black instead of any "health" color,
+  // since there's nothing left there to show a state for.
+  if(s.limbLost)  return {fill:'rgba(0,0,0,0.55)',stroke:'#000'}
   if(s.tq)        return {fill:'rgba(251,191,36,0.22)',stroke:'#fbbf24'}
   if(s.chestSeal) return {fill:'rgba(251,146,60,0.22)',stroke:'#fb923c'}
   if(s.bleeding)  return {fill:'rgba(220,38,38,0.28)', stroke:'#dc2626'}
@@ -3555,7 +3561,7 @@ window.openTreat = (zone, target='self') => {
   // Status
   let st = ''
   if(patient.dead) {
-    const causeLabel = { headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST' }[patient.deathCause] || 'DECEASED'
+    const causeLabel = { headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST', chest_seal_failure:'CHEST SEAL FAILURE' }[patient.deathCause] || 'DECEASED'
     st = `<div style="font-size:12px;color:#9ca3af;font-weight:700">☠ DECEASED — ${causeLabel}</div>`
   } else if(s?.limbLost) {
     st = `<div style="font-size:12px;color:#6b7280;font-weight:700">✕ LIMB LOST — tourniquet was left on too long</div>`
@@ -3912,6 +3918,8 @@ function startTickers() {
     onKnockedOut: () => { sfx('alert'); Comms.silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
     onOdTick: () => updateBodyFigure(),
     onCardiacArrest: () => { sfx('alert'); Comms.silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
+    onChestSealFailing: () => { sfx('alert'); callout('chest seal failing, pack the wound') },
+    onChestSealDeath: () => { sfx('alert'); Comms.silenceAllRadios(); updateDownBtn(); refreshOpenTreat() },
   })
 }
 

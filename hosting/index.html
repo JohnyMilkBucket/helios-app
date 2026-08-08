@@ -207,7 +207,7 @@ const db = getFirestore(app)
 const $ = id => document.getElementById(id)
 const ZONES = Medical.ZONES
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
-const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST'}
+const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST', chest_seal_failure:'CHEST SEAL FAILURE'}
 
 const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], events:[], roles:[], units:[], self:Medical.getSelf(), patients:[], listeners:[], jointOp:null, jointOpParticipants:[], jointOpCasualties:[] }
 
@@ -403,6 +403,8 @@ async function enterCard(cardId) {
     onCardiacArrest: () => renderMedicalView(),
     onLimbLost: () => renderMedicalView(),
     onLimbNumb: () => alertUser('LIMB NUMB', 'A tourniquet has been on too long — circulation is going.'),
+    onChestSealFailing: () => alertUser('CHEST SEAL FAILING', 'Pack the wound or it will resume bleeding.'),
+    onChestSealDeath: () => renderMedicalView(),
   })
 
   S.listeners.push(onSnapshot(collection(db,'cards',cardId,'members'), snap => {

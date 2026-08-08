@@ -1,6 +1,6 @@
 {
   "name": "helios",
-  "version": "1.4.21",
+  "version": "1.4.22",
   "description": "Helios Tactical Overlay",
   "main": "main.js",
   "scripts": {
