@@ -3,6 +3,11 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.23
+- Body map figure reshaped: removed the neck block, torso and legs are
+  wider, legs are shorter. Same zones/click targets, tourniquet/chest-seal
+  overlays repositioned to match.
+
 ## v1.4.22
 - A limb that's gone (tourniquet left on too long) now shows translucent
   black on the body map instead of grey.

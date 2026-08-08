@@ -624,19 +624,18 @@ html.popout-mode #content{padding:10px 12px}
                       <div id="halo-div" style="width:230px;height:370px;filter:blur(16px);transition:background .5s"></div>
                     </div>
                     <svg id="body-svg" viewBox="0 0 200 330" width="165" height="290" style="overflow:visible;position:relative;z-index:2">
-                      <rect id="z-neck" x="90" y="60" width="20" height="14" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.2"/>
                       <rect id="z-head" class="zone-path" x="72" y="6" width="56" height="58" rx="12" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('head','self')"/>
                       <text x="100" y="39" text-anchor="middle" font-size="7" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.7" pointer-events="none">HEAD</text>
-                      <rect id="z-torso" class="zone-path" x="60" y="74" width="80" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('torso','self')"/>
-                      <text x="100" y="126" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
-                      <rect id="z-l_arm" class="zone-path" x="14" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_arm','self')"/>
-                      <text x="34" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
-                      <rect id="z-r_arm" class="zone-path" x="146" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_arm','self')"/>
-                      <text x="166" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
-                      <rect id="z-l_leg" class="zone-path" x="62" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_leg','self')"/>
-                      <text x="80" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
-                      <rect id="z-r_leg" class="zone-path" x="102" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_leg','self')"/>
-                      <text x="120" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
+                      <rect id="z-torso" class="zone-path" x="52" y="64" width="96" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('torso','self')"/>
+                      <text x="100" y="116" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
+                      <rect id="z-l_arm" class="zone-path" x="8" y="64" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_arm','self')"/>
+                      <text x="28" y="116" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
+                      <rect id="z-r_arm" class="zone-path" x="152" y="64" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_arm','self')"/>
+                      <text x="172" y="116" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
+                      <rect id="z-l_leg" class="zone-path" x="52" y="160" width="46" height="110" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_leg','self')"/>
+                      <text x="75" y="219" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
+                      <rect id="z-r_leg" class="zone-path" x="102" y="160" width="46" height="110" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_leg','self')"/>
+                      <text x="125" y="219" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
                       <g id="zone-icons" pointer-events="none"></g>
                     </svg>
                   </div>
@@ -1387,19 +1386,19 @@ const MAX_RADIO = 2
 const { INJ, BANDAGES_NEEDED, FRAG_INFO, APPLY_MS, ZONES, LIMBS, TQ_WARN_MS, TQ_LOSS_MS } = Medical
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
 const ZONE_SPEECH = {l_arm:'left arm',r_arm:'right arm',l_leg:'left leg',r_leg:'right leg'}
-const ICON_POS = {head:{x:93,y:28},torso:{x:93,y:115},l_arm:{x:27,y:115},r_arm:{x:159,y:115},l_leg:{x:73,y:239},r_leg:{x:113,y:239}}
+const ICON_POS = {head:{x:93,y:28},torso:{x:93,y:105},l_arm:{x:21,y:105},r_arm:{x:165,y:105},l_leg:{x:68,y:208},r_leg:{x:118,y:208}}
 // Where a tourniquet strap gets drawn across each limb block — a horizontal
 // band spanning the limb's full width, positioned in its upper third
 // (where a real tourniquet actually goes). Matches the blocky body-map
 // rects added for the Roblox-style figure (see body-svg/body-svg-p).
 const LIMB_STRAP_SPAN = {
-  l_arm:{x1:14, x2:54,  y:94},
-  r_arm:{x1:146,x2:186, y:94},
-  l_leg:{x1:62, x2:98,  y:194},
-  r_leg:{x1:102,x2:138, y:194},
+  l_arm:{x1:8,  x2:48,  y:84},
+  r_arm:{x1:152,x2:192, y:84},
+  l_leg:{x1:52, x2:98,  y:177},
+  r_leg:{x1:102,x2:148, y:177},
 }
 // Chest seal patch, centered on the torso block.
-const TORSO_SEAL_BOX = {x:78, y:100, size:44}
+const TORSO_SEAL_BOX = {x:76, y:88, size:48}
 const DEFAULT_BREVITY = [] // blank slate — admins add their own
 
 // ── CHANGELOG ─────────────────────────────────────────────────────────────
@@ -1407,6 +1406,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.23', items:[
+    'Body map reshaped: neck removed, torso and legs wider, legs shorter.',
+  ]},
   { v:'1.4.22', items:[
     'Lost limbs now show translucent black instead of grey.',
     'A chest seal left unpacked too long is now fatal (CHEST SEAL FAILURE) instead of just resuming bleeding.',
@@ -3305,9 +3307,6 @@ function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='
     const {fill,stroke} = zoneColors(zones,z)
     el.setAttribute('fill',fill); el.setAttribute('stroke',stroke)
   })
-  // neck follows head
-  const nk=$('z-neck'+prefix); if(nk){const c=zoneColors(zones,'head');nk.setAttribute('fill',c.fill);nk.setAttribute('stroke',c.stroke)}
-
   // Icons
   const ig=$('zone-icons'+prefix)
   if(ig) {
@@ -3470,19 +3469,18 @@ function patientBodyMapHTML() {
         <div id="halo-div-p" style="width:200px;height:330px;filter:blur(16px);transition:background .5s"></div>
       </div>
       <svg id="body-svg-p" viewBox="0 0 200 330" width="150" height="270" style="overflow:visible;position:relative;z-index:2">
-        <rect id="z-neck-p" x="90" y="60" width="20" height="14" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.2"/>
         <rect id="z-head-p" class="zone-path" x="72" y="6" width="56" height="58" rx="12" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('head','patient')"/>
         <text x="100" y="39" text-anchor="middle" font-size="7" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.7" pointer-events="none">HEAD</text>
-        <rect id="z-torso-p" class="zone-path" x="60" y="74" width="80" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('torso','patient')"/>
-        <text x="100" y="126" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
-        <rect id="z-l_arm-p" class="zone-path" x="14" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_arm','patient')"/>
-        <text x="34" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
-        <rect id="z-r_arm-p" class="zone-path" x="146" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_arm','patient')"/>
-        <text x="166" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
-        <rect id="z-l_leg-p" class="zone-path" x="62" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_leg','patient')"/>
-        <text x="80" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
-        <rect id="z-r_leg-p" class="zone-path" x="102" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_leg','patient')"/>
-        <text x="120" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
+        <rect id="z-torso-p" class="zone-path" x="52" y="64" width="96" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('torso','patient')"/>
+        <text x="100" y="116" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
+        <rect id="z-l_arm-p" class="zone-path" x="8" y="64" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_arm','patient')"/>
+        <text x="28" y="116" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
+        <rect id="z-r_arm-p" class="zone-path" x="152" y="64" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_arm','patient')"/>
+        <text x="172" y="116" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
+        <rect id="z-l_leg-p" class="zone-path" x="52" y="160" width="46" height="110" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_leg','patient')"/>
+        <text x="75" y="219" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
+        <rect id="z-r_leg-p" class="zone-path" x="102" y="160" width="46" height="110" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_leg','patient')"/>
+        <text x="125" y="219" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
         <g id="zone-icons-p" pointer-events="none"></g>
       </svg>
     </div>
