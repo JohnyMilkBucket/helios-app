@@ -3,6 +3,24 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.21
+- Big Medical update:
+  - A packed/bled-out-controlled wound now shows yellow on the body map
+    instead of staying red — red is reserved for actively bleeding.
+  - Body map redesigned into a blocky Roblox-style figure (same zones,
+    same click targets).
+  - Tourniquets and chest seals now draw an actual strap/patch overlay
+    on the model, not just a color change.
+  - New: chest seals (chest tourniquets) — torso-only, same rules as a
+    limb tourniquet (controls bleeding, doesn't guarantee it stops, can
+    fail if left on too long without the wound packed underneath).
+  - New: bandages can be unpacked (reopens the wound) — each one takes
+    its own timed action to remove, same as applying it did. The number
+    of bandages currently on a wound is now shown.
+  - New: fragmentation can be searched for (15-20s, requires the wound
+    to be fully open — tourniquets are fine, a chest seal has to come
+    off first) and then removed.
+
 ## v1.4.20
 - Fixed tourniquets not ticking toward numbness/limb loss when applied to
   a zone that was never actually injured (e.g. testing/preemptively

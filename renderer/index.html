@@ -624,21 +624,20 @@ html.popout-mode #content{padding:10px 12px}
                       <div id="halo-div" style="width:230px;height:370px;filter:blur(16px);transition:background .5s"></div>
                     </div>
                     <svg id="body-svg" viewBox="0 0 200 330" width="165" height="290" style="overflow:visible;position:relative;z-index:2">
-                      <rect id="z-neck" x="93" y="56" width="14" height="10" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.2"/>
-                      <ellipse id="z-head" class="zone-path" cx="100" cy="32" rx="20" ry="24" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('head','self')"/>
-                      <text x="100" y="34" text-anchor="middle" font-size="7" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.7" pointer-events="none">HEAD</text>
-                      <path id="z-torso" class="zone-path" d="M75 66L125 66L131 82L128 142L120 170L80 170L72 142L69 82Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('torso','self')"/>
-                      <text x="100" y="118" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
-                      <path id="z-l_arm" class="zone-path" d="M69 82L50 93L38 140L35 188L45 193L50 170L60 126L70 97Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('l_arm','self')"/>
-                      <text x="47" y="143" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
-                      <path id="z-r_arm" class="zone-path" d="M131 82L150 93L162 140L165 188L155 193L150 170L140 126L130 97Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('r_arm','self')"/>
-                      <text x="153" y="143" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
-                      <path id="z-l_leg" class="zone-path" d="M80 170L98 170L96 232L90 310L79 314L77 276L76 222Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('l_leg','self')"/>
-                      <text x="86" y="240" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
-                      <path id="z-r_leg" class="zone-path" d="M120 170L102 170L104 232L110 310L121 314L123 276L124 222Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('r_leg','self')"/>
-                      <text x="114" y="240" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
+                      <rect id="z-neck" x="90" y="60" width="20" height="14" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.2"/>
+                      <rect id="z-head" class="zone-path" x="72" y="6" width="56" height="58" rx="12" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('head','self')"/>
+                      <text x="100" y="39" text-anchor="middle" font-size="7" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.7" pointer-events="none">HEAD</text>
+                      <rect id="z-torso" class="zone-path" x="60" y="74" width="80" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('torso','self')"/>
+                      <text x="100" y="126" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
+                      <rect id="z-l_arm" class="zone-path" x="14" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_arm','self')"/>
+                      <text x="34" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
+                      <rect id="z-r_arm" class="zone-path" x="146" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_arm','self')"/>
+                      <text x="166" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
+                      <rect id="z-l_leg" class="zone-path" x="62" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_leg','self')"/>
+                      <text x="80" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
+                      <rect id="z-r_leg" class="zone-path" x="102" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_leg','self')"/>
+                      <text x="120" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
                       <g id="zone-icons" pointer-events="none"></g>
-                      <line x1="100" y1="66" x2="100" y2="170" stroke="rgba(91,139,181,0.1)" stroke-width="0.5" stroke-dasharray="2,2"/>
                     </svg>
                   </div>
                   <div style="font-size:9px;text-align:center;margin-top:5px;color:var(--accent)">TAP ZONE TO TREAT</div>
@@ -1388,7 +1387,19 @@ const MAX_RADIO = 2
 const { INJ, BANDAGES_NEEDED, FRAG_INFO, APPLY_MS, ZONES, LIMBS, TQ_WARN_MS, TQ_LOSS_MS } = Medical
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
 const ZONE_SPEECH = {l_arm:'left arm',r_arm:'right arm',l_leg:'left leg',r_leg:'right leg'}
-const ICON_POS = {head:{x:86,y:8},torso:{x:86,y:88},l_arm:{x:30,y:161},r_arm:{x:140,y:161},l_leg:{x:72,y:260},r_leg:{x:106,y:260}}
+const ICON_POS = {head:{x:93,y:28},torso:{x:93,y:115},l_arm:{x:27,y:115},r_arm:{x:159,y:115},l_leg:{x:73,y:239},r_leg:{x:113,y:239}}
+// Where a tourniquet strap gets drawn across each limb block — a horizontal
+// band spanning the limb's full width, positioned in its upper third
+// (where a real tourniquet actually goes). Matches the blocky body-map
+// rects added for the Roblox-style figure (see body-svg/body-svg-p).
+const LIMB_STRAP_SPAN = {
+  l_arm:{x1:14, x2:54,  y:94},
+  r_arm:{x1:146,x2:186, y:94},
+  l_leg:{x1:62, x2:98,  y:194},
+  r_leg:{x1:102,x2:138, y:194},
+}
+// Chest seal patch, centered on the torso block.
+const TORSO_SEAL_BOX = {x:78, y:100, size:44}
 const DEFAULT_BREVITY = [] // blank slate — admins add their own
 
 // ── CHANGELOG ─────────────────────────────────────────────────────────────
@@ -1396,6 +1407,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.21', items:[
+    'Big Medical update: yellow (not red) once a wound is packed/controlled, blocky redesigned body map with real TQ/chest-seal overlays, new chest seals, bandage unpacking with a visible count, and fragmentation search + removal.',
+  ]},
   { v:'1.4.20', items:[
     'Fixed tourniquets/stims not working (not ticking toward numbness, limb loss, or overdose) when applied before ever going down.',
     'Self-treatment now works even before you\'ve gone down at all.',
@@ -1642,6 +1656,35 @@ function svgDep(sz=13) {
 function svgFracture(sz=13) {
   return `<svg width="${sz}" height="${sz}" viewBox="0 0 20 20"><path d="M2 10h4l2-5 3 10 2-5h5" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 }
+// Occlusive chest seal — a square adhesive patch with a one-way vent
+// circle and a couple of edge tabs, visually distinct from the bandage
+// (cross) and tourniquet (strap+buckle) icons.
+function svgChestSeal(sz=13) {
+  return `<svg width="${sz}" height="${sz}" viewBox="0 0 20 20"><rect x="2.5" y="2.5" width="15" height="15" rx="2" fill="#3a2412" stroke="#fb923c" stroke-width="1.2"/><circle cx="10" cy="10" r="3.4" fill="none" stroke="#fb923c" stroke-width="1.1"/><circle cx="10" cy="10" r="1.1" fill="#fb923c"/><line x1="2.5" y1="6.5" x2="17.5" y2="6.5" stroke="#fb923c" stroke-width=".6" opacity=".5"/><line x1="2.5" y1="13.5" x2="17.5" y2="13.5" stroke="#fb923c" stroke-width=".6" opacity=".5"/></svg>`
+}
+// Full-size overlays drawn directly on the body map (not the small corner
+// icons) — a real strap wrapped across the limb for a tourniquet, and a
+// patch stuck to the torso for a chest seal, so either reads as visibly
+// "on the model" at a glance, not just a color change and a tiny icon.
+function svgTqStrapOverlay(span) {
+  const w = span.x2-span.x1
+  const midX = span.x1 + w/2
+  return `
+    <rect x="${span.x1}" y="${span.y}" width="${w}" height="12" rx="2" fill="#1f2937" stroke="#fbbf24" stroke-width="1.2"/>
+    <line x1="${span.x1}" y1="${span.y+4}" x2="${span.x2}" y2="${span.y+4}" stroke="#fbbf24" stroke-width=".6" opacity=".5"/>
+    <line x1="${span.x1}" y1="${span.y+8}" x2="${span.x2}" y2="${span.y+8}" stroke="#fbbf24" stroke-width=".6" opacity=".5"/>
+    <circle cx="${midX}" cy="${span.y+6}" r="2.2" fill="#fbbf24"/>
+    <line x1="${midX}" y1="${span.y+6}" x2="${span.x2+6}" y2="${span.y+6}" stroke="#fbbf24" stroke-width="2.4"/>`
+}
+function svgChestSealOverlay(box) {
+  const cx = box.x+box.size/2, cy = box.y+box.size/2
+  return `
+    <rect x="${box.x}" y="${box.y}" width="${box.size}" height="${box.size}" rx="4" fill="#3a2412" stroke="#fb923c" stroke-width="1.4"/>
+    <circle cx="${cx}" cy="${cy}" r="${box.size*0.22}" fill="none" stroke="#fb923c" stroke-width="1.3"/>
+    <circle cx="${cx}" cy="${cy}" r="2.4" fill="#fb923c"/>
+    <line x1="${box.x}" y1="${box.y+box.size*0.3}" x2="${box.x+box.size}" y2="${box.y+box.size*0.3}" stroke="#fb923c" stroke-width=".7" opacity=".5"/>
+    <line x1="${box.x}" y1="${box.y+box.size*0.7}" x2="${box.x+box.size}" y2="${box.y+box.size*0.7}" stroke="#fb923c" stroke-width=".7" opacity=".5"/>`
+}
 function svgItemIcon(id,sz=18,color='#fff') {
   if(id==='bandage') return `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 8v8M8 12h8"/></svg>`
   if(id==='tourniquet') return svgTQ(sz)
@@ -1649,6 +1692,7 @@ function svgItemIcon(id,sz=18,color='#fff') {
   if(id==='depressant') return svgDep(sz)
   if(id==='blood')      return svgBag(sz,1)
   if(id==='splint')     return svgFracture(sz)
+  if(id==='chestseal')  return svgChestSeal(sz)
   return ''
 }
 
@@ -1794,7 +1838,7 @@ window.doCreateCard = async () => {
           username:S.profile.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OWNER', color:'#fbbf24',
           isAdmin:true, canTreatOthers:true, canCreateOps:true, canEditBrevity:true,
           canMultiChan:true, online:true, joinedAt:serverTimestamp(),
-          ld:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
+          ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
         })
       })
     } else {
@@ -1853,7 +1897,7 @@ window.doJoinCard = async () => {
         username:S.profile.username||S.profile.callsign||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OPERATOR', color:'#a8b8cc',
         isAdmin:false, canTreatOthers:false, canCreateOps:false, canEditBrevity:false,
         canMultiChan:false, online:true, joinedAt:serverTimestamp(),
-        ld:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
+        ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
       })
     }
     await addCardToProfile(cardId)
@@ -1920,7 +1964,7 @@ async function enterCard(cardId) {
   // Load user member record
   const memSnap = await getDoc(doc(db,'cards',cardId,'members',S.user.uid))
   S.member = memSnap.exists() ? memSnap.data() : {}
-  Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})
+  Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0})
 
   // Load card doc BEFORE showing anything, so an expired license shows the
   // lock screen straight away instead of flashing the full app first.
@@ -2018,7 +2062,7 @@ function subscribeAll(cardId) {
         // mirror it straight from the member doc any time it changes,
         // regardless of down state. Only ever refilled by starting a new
         // operation, never by revive/going down.
-        Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0})
+        Medical.syncInventory(S.member.inv||{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0})
         renderInventory()
       }
       // Update user strip
@@ -2686,7 +2730,7 @@ function renderOps() {
 // otherwise persists permanently (used is used, no auto-refill on revive),
 // so this is deliberately the one reset button admins have.
 async function resetRosterSupplies(members) {
-  const zero = {bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
+  const zero = {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
   await Promise.all(members.map(m =>
     setDoc(doc(db,'cards',S.cardId,'members',m.uid||m.id), { inv:{...(m.ld||zero)} }, {merge:true})
   ))
@@ -2928,6 +2972,7 @@ function renderRoles() {
   const ldItems = [
     {k:'bandage',    ico:svgItemIcon('bandage',13,'#4ade80'), color:'#4ade80'},
     {k:'tourniquet', ico:svgTQ(13),                           color:'#fbbf24'},
+    {k:'chestseal',  ico:svgItemIcon('chestseal',13,'#fb923c'), color:'#fb923c'},
     {k:'splint',     ico:svgFracture(13),                     color:'#a78bfa'},
     {k:'stim',       ico:svgStim(13),                         color:'#a78bfa'},
     {k:'depressant', ico:svgDep(13),                          color:'#60a5fa'},
@@ -2944,7 +2989,7 @@ function renderRoles() {
   const isAdmin = S.member?.isAdmin
   el.innerHTML = allRoles.map(role => {
     const memberCount = S.members.filter(m=>m.role===role.name).length
-    const ld = role.ld || {bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
+    const ld = role.ld || {bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
     const permsDisplay = [
       role.isAdmin        && 'ADMIN',
       role.canTreatOthers && 'MEDIC',
@@ -3119,6 +3164,7 @@ window.showNewRoleModal = () => {
             ${[
               {k:'bandage',    ico:svgItemIcon('bandage',13,'#4ade80'), color:'#4ade80'},
               {k:'tourniquet', ico:svgTQ(13),                           color:'#fbbf24'},
+              {k:'chestseal',  ico:svgChestSeal(13),                    color:'#fb923c'},
               {k:'splint',     ico:svgFracture(13),                     color:'#a78bfa'},
               {k:'stim',       ico:svgStim(13),                         color:'#a78bfa'},
               {k:'depressant', ico:svgDep(13),                          color:'#60a5fa'},
@@ -3152,7 +3198,7 @@ window.createNewRole = async () => {
     canMultiChan:   document.getElementById('nr-canMultiChan')?.checked||false,
   }
   const ld = {}
-  for(const k of ['bandage','tourniquet','splint','stim','depressant','blood']) {
+  for(const k of ['bandage','tourniquet','chestseal','splint','stim','depressant','blood']) {
     ld[k] = Math.max(0, parseInt(document.getElementById('nr-ld-'+k)?.value)||0)
   }
   sfx('success')
@@ -3231,10 +3277,14 @@ window.toggleDown = async () => {
 function zoneColors(zones, z) {
   const s = zones[z]
   if(!s) return {fill:'rgba(91,139,181,0.1)',stroke:'rgba(91,139,181,0.38)'}
-  if(s.limbLost) return {fill:'rgba(107,114,128,.35)',stroke:'#374151'}
-  if(s.tq)       return {fill:'rgba(251,191,36,0.22)',stroke:'#fbbf24'}
+  if(s.limbLost)  return {fill:'rgba(107,114,128,.35)',stroke:'#374151'}
+  if(s.tq)        return {fill:'rgba(251,191,36,0.22)',stroke:'#fbbf24'}
+  if(s.chestSeal) return {fill:'rgba(251,146,60,0.22)',stroke:'#fb923c'}
   if(s.bleeding)  return {fill:'rgba(220,38,38,0.28)', stroke:'#dc2626'}
   if(s.fracture)  return {fill:'rgba(167,139,250,0.22)',stroke:'#a78bfa'}
+  // Bleeding stopped/packed — the wound isn't gone, but it's under
+  // control now, so it no longer needs to read as urgent (red).
+  if(s.bandaged)  return {fill:'rgba(250,204,21,0.22)', stroke:'#facc15'}
   if(s.splinted)  return {fill:'rgba(167,139,250,0.1)',stroke:'#a78bfa88'}
   const c = INJ[s.inj]?.color||'#8db3d4'
   return {fill:c+'18',stroke:c}
@@ -3259,23 +3309,31 @@ function updateBodyFigure(zones=S.self.zones, bloodPct=S.self.bloodPct, prefix='
     ZONES.forEach(z=>{
       const s=zones[z]; if(!s) return
       const p=ICON_POS[z]
-      let ico = s.tq ? svgTQ(13) : s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.splinted ? svgFracture(13) : s.frag ? svgFrag(13) : svgBleed(13,false)
-      ig.innerHTML += `<foreignObject x="${p.x}" y="${p.y}" width="14" height="14">${ico}</foreignObject>`
+      // TQ/chest seal get a full strap/patch drawn across the actual limb
+      // or torso instead of (redundant with) a small corner icon — this is
+      // what "attach a visual tourniquet/chest seal to the model" means in
+      // practice, since the body map itself IS the model.
+      if(s.tq && LIMB_STRAP_SPAN[z]) {
+        ig.innerHTML += svgTqStrapOverlay(LIMB_STRAP_SPAN[z])
+      } else if(s.chestSeal && z==='torso') {
+        ig.innerHTML += svgChestSealOverlay(TORSO_SEAL_BOX)
+      } else {
+        let ico = s.bleeding ? svgBleed(13,true) : s.fracture ? svgFracture(13) : s.splinted ? svgFracture(13) : s.frag ? svgFrag(13) : svgBleed(13,false)
+        ig.innerHTML += `<foreignObject x="${p.x}" y="${p.y}" width="14" height="14">${ico}</foreignObject>`
+      }
       // Fracture/frag each get their own small marker too, since they'd
-      // otherwise be hidden behind a bleed/TQ icon whenever combined on a zone.
-      // Splinted reuses the same marker as an active fracture — it's the
-      // same underlying condition, just currently controlled.
-      if((s.fracture||s.splinted) && (s.tq || s.bleeding)) {
+      // otherwise be hidden behind a bleed/TQ/seal icon whenever combined
+      // on a zone. Splinted reuses the same marker as an active fracture —
+      // it's the same underlying condition, just currently controlled.
+      const hasPrimaryIcon = s.tq || s.chestSeal || s.bleeding
+      if((s.fracture||s.splinted) && hasPrimaryIcon) {
         ig.innerHTML += `<foreignObject x="${p.x+11}" y="${p.y-4}" width="11" height="11">${svgFracture(11)}</foreignObject>`
       }
-      if(s.frag && (s.tq || s.bleeding || s.fracture || s.splinted)) {
+      if(s.frag && (hasPrimaryIcon || s.fracture || s.splinted)) {
         ig.innerHTML += `<foreignObject x="${p.x-11}" y="${p.y-4}" width="11" height="11">${svgFrag(11)}</foreignObject>`
       }
-      // Small persistent label right on the body map so a tourniquet reads
-      // as obviously "on" without having to open the zone's treat panel.
-      if(s.tq) {
-        ig.innerHTML += `<text x="${p.x+7}" y="${p.y+24}" text-anchor="middle" font-size="5" font-weight="700" fill="#fbbf24" font-family="Orbitron,sans-serif" letter-spacing="0.1">TOURNIQUET APPLIED</text>`
-      }
+      // No separate "TOURNIQUET APPLIED" text label anymore — the strap/
+      // patch overlay drawn above is the visible "it's on" signal now.
     })
   }
 
@@ -3321,7 +3379,7 @@ function renderOverview(zones, prefix='') {
   if(!el) return
   const injuredZones = ZONES.filter(z=>{
     const s = zones[z]
-    return s && (s.inj || s.fracture || s.splinted || s.tq || s.bleeding || s.limbLost)
+    return s && (s.inj || s.fracture || s.splinted || s.tq || s.chestSeal || s.bleeding || s.limbLost)
   })
   if(!injuredZones.length) {
     el.innerHTML = `<div style="font-size:11px;color:var(--green)">● NO INJURIES</div>`
@@ -3331,17 +3389,22 @@ function renderOverview(zones, prefix='') {
     const s = zones[z]
     const lines = [`<div class="orb" style="font-size:11px;font-weight:700;color:#e5edf5;margin-top:10px">${ZONE_LABEL[z]}</div>`]
     if(s.limbLost) { lines.push(`<div style="font-size:10px;color:#6b7280">Limb lost — TQ left on too long</div>`); return lines.join('') }
-    if(s.bleeding && !s.tq) lines.push(`<div style="font-size:10px;color:var(--red)">Lost some blood</div>`)
+    if(s.bleeding && !s.tq && !s.chestSeal) lines.push(`<div style="font-size:10px;color:var(--red)">Lost some blood</div>`)
     if(s.tq) {
       lines.push(`<div style="font-size:10px;color:var(--amber)">Tourniquet [CAT]</div>`)
       if(s.tqNumb) lines.push(`<div style="font-size:10px;color:var(--red)">⚠ Limb numb — unusable</div>`)
       if(s.tqAppliedAt && Date.now()-s.tqAppliedAt>=TQ_LOSS_MS-60000) lines.push(`<div style="font-size:10px;color:var(--red);font-weight:700">⚠ TQ time critical</div>`)
     }
+    if(s.chestSeal) {
+      lines.push(`<div style="font-size:10px;color:#fb923c">Chest seal</div>`)
+      if(s.chestSealFailing) lines.push(`<div style="font-size:10px;color:var(--red);font-weight:700">⚠ Seal failing — pack the wound</div>`)
+    }
+    if((s.bandagesApplied||0)>0) lines.push(`<div style="font-size:10px;color:#a8b8cc">${s.bandagesApplied} bandage${s.bandagesApplied===1?'':'s'}${s.bandaged?' — packed':''}</div>`)
     if(s.fracture) lines.push(`<div style="font-size:10px;color:#a78bfa">Fractured</div>`)
     if(s.splinted) lines.push(`<div style="font-size:10px;color:#a78bfa">(<span style="text-decoration:line-through">Fracture</span>) Splint</div>`)
     if(s.pain)     lines.push(`<div style="font-size:10px;color:#a8b8cc">In pain</div>`)
     if(s.inj)      lines.push(`<div style="font-size:10px;color:${INJ[s.inj]?.color||'#8db3d4'}">1x ${INJ[s.inj]?.name||s.inj}</div>`)
-    if(s.frag)     lines.push(`<div style="font-size:10px;color:${FRAG_INFO.color}">+ ${FRAG_INFO.name}</div>`)
+    if(s.frag)     lines.push(`<div style="font-size:10px;color:${FRAG_INFO.color}">${s.fragFound?'Fragment located':'+ '+FRAG_INFO.name}</div>`)
     return lines.join('')
   }).join('')
 }
@@ -3401,21 +3464,20 @@ function patientBodyMapHTML() {
         <div id="halo-div-p" style="width:200px;height:330px;filter:blur(16px);transition:background .5s"></div>
       </div>
       <svg id="body-svg-p" viewBox="0 0 200 330" width="150" height="270" style="overflow:visible;position:relative;z-index:2">
-        <rect id="z-neck-p" x="93" y="56" width="14" height="10" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.2"/>
-        <ellipse id="z-head-p" class="zone-path" cx="100" cy="32" rx="20" ry="24" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('head','patient')"/>
-        <text x="100" y="34" text-anchor="middle" font-size="7" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.7" pointer-events="none">HEAD</text>
-        <path id="z-torso-p" class="zone-path" d="M75 66L125 66L131 82L128 142L120 170L80 170L72 142L69 82Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('torso','patient')"/>
-        <text x="100" y="118" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
-        <path id="z-l_arm-p" class="zone-path" d="M69 82L50 93L38 140L35 188L45 193L50 170L60 126L70 97Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('l_arm','patient')"/>
-        <text x="47" y="143" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
-        <path id="z-r_arm-p" class="zone-path" d="M131 82L150 93L162 140L165 188L155 193L150 170L140 126L130 97Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('r_arm','patient')"/>
-        <text x="153" y="143" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
-        <path id="z-l_leg-p" class="zone-path" d="M80 170L98 170L96 232L90 310L79 314L77 276L76 222Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('l_leg','patient')"/>
-        <text x="86" y="240" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
-        <path id="z-r_leg-p" class="zone-path" d="M120 170L102 170L104 232L110 310L121 314L123 276L124 222Z" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" stroke-linejoin="round" onclick="openTreat('r_leg','patient')"/>
-        <text x="114" y="240" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
+        <rect id="z-neck-p" x="90" y="60" width="20" height="14" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.2"/>
+        <rect id="z-head-p" class="zone-path" x="72" y="6" width="56" height="58" rx="12" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('head','patient')"/>
+        <text x="100" y="39" text-anchor="middle" font-size="7" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.7" pointer-events="none">HEAD</text>
+        <rect id="z-torso-p" class="zone-path" x="60" y="74" width="80" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('torso','patient')"/>
+        <text x="100" y="126" text-anchor="middle" font-size="7.5" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.8" pointer-events="none">TORSO</text>
+        <rect id="z-l_arm-p" class="zone-path" x="14" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_arm','patient')"/>
+        <text x="34" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.ARM</text>
+        <rect id="z-r_arm-p" class="zone-path" x="146" y="74" width="40" height="96" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_arm','patient')"/>
+        <text x="166" y="126" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.ARM</text>
+        <rect id="z-l_leg-p" class="zone-path" x="62" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('l_leg','patient')"/>
+        <text x="80" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">L.LEG</text>
+        <rect id="z-r_leg-p" class="zone-path" x="102" y="172" width="36" height="148" rx="6" fill="rgba(91,139,181,0.1)" stroke="rgba(91,139,181,0.38)" stroke-width="1.4" onclick="openTreat('r_leg','patient')"/>
+        <text x="120" y="250" text-anchor="middle" font-size="6" fill="#8db3d4" font-family="Orbitron,sans-serif" letter-spacing="0.5" pointer-events="none">R.LEG</text>
         <g id="zone-icons-p" pointer-events="none"></g>
-        <line x1="100" y1="66" x2="100" y2="170" stroke="rgba(91,139,181,0.1)" stroke-width="0.5" stroke-dasharray="2,2"/>
       </svg>
     </div>
     <div style="font-size:9px;text-align:center;margin-top:5px;color:var(--accent)">TAP ZONE TO TREAT</div>`
@@ -3499,19 +3561,26 @@ window.openTreat = (zone, target='self') => {
     st = `<div style="font-size:12px;color:#6b7280;font-weight:700">✕ LIMB LOST — tourniquet was left on too long</div>`
   } else if(s) {
     st += `<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgBleed(13,false)}<span style="color:${injInfo?.color||'#8db3d4'};font-weight:700">${s.inj}</span><span style="color:#a8b8cc">· ${injInfo?.name||''}</span></div>`
-    if(s.frag) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">+ ${FRAG_INFO.name.toUpperCase()}</span></div>`
-    if(s.tq)      st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgTQ(13)}<span style="color:var(--amber);font-weight:700">TOURNIQUET APPLIED</span></div>`
-    else if(s.bleeding) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgBleed(13,false)}<span style="color:var(--red);font-weight:700">ACTIVE BLEEDING</span></div>`
+    if(s.frag && !s.fragFound) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">+ ${FRAG_INFO.name.toUpperCase()}</span></div>`
+    if(s.fragFound) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">FRAGMENT LOCATED — READY TO REMOVE</span></div>`
+    if(s.tq)             st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgTQ(13)}<span style="color:var(--amber);font-weight:700">TOURNIQUET APPLIED</span></div>`
+    else if(s.chestSeal) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgChestSeal(13)}<span style="color:#fb923c;font-weight:700">CHEST SEAL APPLIED</span></div>`
+    else if(s.bleeding)  st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgBleed(13,false)}<span style="color:var(--red);font-weight:700">ACTIVE BLEEDING</span></div>`
     else st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING CONTROLLED</div>`
     if(s.tq && s.tqAppliedAt) {
       const tqMs = Date.now()-s.tqAppliedAt
       if(s.tqNumb) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ LIMB NUMB — UNUSABLE WHILE TQ IS ON</div>`
       if(tqMs>=TQ_LOSS_MS-60000) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ TQ ON ${Math.floor(tqMs/60000)}m — REMOVE OR LOSE LIMB SOON</div>`
     }
-    // Doesn't reveal exactly how many more are needed — just that it's not
-    // fully packed yet, so the player keeps bandaging until it sticks.
+    if(s.chestSeal && s.chestSealAppliedAt) {
+      const sealMs = Date.now()-s.chestSealAppliedAt
+      if(s.chestSealFailing) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ SEAL FAILING — PACK THE WOUND OR IT WILL RESUME BLEEDING</div>`
+      else if(sealMs>=TQ_LOSS_MS-60000) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ SEAL ON ${Math.floor(sealMs/60000)}m — PACK THE WOUND SOON</div>`
+    }
+    if((s.bandagesApplied||0)>0) st+=`<div style="font-size:11px;color:#a8b8cc;margin-top:4px">${s.bandagesApplied} bandage${s.bandagesApplied===1?'':'s'} on this wound${s.bandaged?' — fully packed':''}</div>`
     if(!s.bandaged && (s.bandagesApplied||0)>0 && s.bleeding) st+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">Wound partially packed — keep bandaging</div>`
     if(s.bandaged && s.tq) st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">Wound packed — safe to remove TQ</div>`
+    if(s.bandaged && s.chestSeal) st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">Wound packed — safe to remove seal</div>`
     if(s.fracture) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-top:4px">${svgFracture(13)}<span style="color:#a78bfa;font-weight:700">FRACTURED</span></div>`
     if(s.splinted) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-top:4px">${svgFracture(13)}<span style="color:#a78bfa;font-weight:700">(<span style="text-decoration:line-through">FRACTURE</span>) SPLINT</span></div>`
     if(s.pain)     st+=`<div style="font-size:11px;color:#a8b8cc;margin-top:4px">In pain</div>`
@@ -3540,23 +3609,45 @@ window.openTreat = (zone, target='self') => {
 
   // Inventory source — medic uses THEIR OWN inv, treating patient's record
   const inv = S.self.inv
+  const bandagesApplied = s?.bandagesApplied||0
+  // A frag can only be searched for (or, once found, actually pulled out)
+  // with the wound genuinely open — any bandage covering it, or a chest
+  // seal plugging a torso wound, blocks access. A limb tourniquet does NOT
+  // block it — it's proximal, not covering the wound site itself.
+  const woundExposed = bandagesApplied===0 && !s?.chestSeal
 
   const treats = [
-    {id:'bandage',    label:'BANDAGE',    color:'#4ade80', timeSec:s?.frag?15:5, desc:s?.frag?'Pack frag — 15s':'Stop bleed — 5s'},
+    {id:'bandage', label:'BANDAGE', color:'#4ade80', timeSec:s?.frag?15:5,
+      desc: s?.bandaged ? '✓ FULLY PACKED' : !s?.inj ? '❌ NOTHING TO PACK' : (s?.frag?'Pack frag — 15s':'Stop bleed — 5s'),
+      locked: !s?.inj || s?.bandaged},
+    ...(bandagesApplied>0 ? [
+      {id:'unpack_bandage', label:'UNPACK', color:'#4ade80', timeSec:4, desc:`Reopens wound — 4s (${bandagesApplied} on)`, noInv:true},
+    ] : []),
     s?.tq
       ? {id:'remove_tourniquet', label:'REMOVE TQ', color:'#fbbf24', timeSec:2, desc:s?.bandaged?'Wound is packed — safe':'⚠ Resumes bleeding — 2s', noInv:true}
       : {id:'tourniquet', label:'TOURNIQUET', color:'#fbbf24', timeSec:3, desc:isLimb?'Fast stop — 3s':'❌ LIMBS ONLY', locked:!isLimb},
+    ...(zone==='torso' ? [
+      s?.chestSeal
+        ? {id:'remove_chest_seal', label:'REMOVE SEAL', color:'#fb923c', timeSec:2, desc:s?.bandaged?'Wound is packed — safe':'⚠ Resumes bleeding — 2s', noInv:true}
+        : {id:'chest_seal', label:'CHEST SEAL', color:'#fb923c', timeSec:4, desc:s?.chestSealFailing?'⚠ pack the wound, seal is failing':'Controls bleeding — doesn\'t guarantee it stops — 4s'},
+    ] : []),
     s?.splinted
       ? {id:'remove_splint', label:'REMOVE SPLINT', color:'#a78bfa', timeSec:2, desc:'⚠ Fracture returns — 2s', noInv:true}
       : {id:'splint', label:'SPLINT', color:'#a78bfa', timeSec:6, desc:s?.fracture?'Fix fracture — 6s':'❌ NO FRACTURE', locked:!s?.fracture},
+    ...(s?.frag ? [
+      s?.fragFound
+        ? {id:'remove_frag', label:'REMOVE FRAG', color:'#f97316', timeSec:4, desc: woundExposed?'Pull it out — 4s':'❌ WOUND MUST BE OPEN', locked:!woundExposed, noInv:true}
+        : {id:'find_frag', label:'FIND FRAG', color:'#f97316', timeSec:'15-20', desc: woundExposed?'Search takes 15-20s':'❌ WOUND MUST BE OPEN', locked:!woundExposed, noInv:true},
+    ] : []),
     {id:'stim',       label:'STIMULANT',  color:'#a78bfa', timeSec:3,
       desc: !patient.uncon ? (patient.overdosing ? '⚠ HR climbing — ANOTHER dose speeds it up' : '⚠ HR→200, climbs to cardiac arrest') : 'Wake patient — 3s'},
     {id:'depressant', label:'DEPRESSANT', color:'#60a5fa', timeSec:3, desc: patient.overdosing?'Clears OD — 3s':'Lower HR — 3s'},
     {id:'blood',      label:'BLOOD BAG',  color:'#dc2626', timeSec:10,desc:'Restore +40% — 10s'},
   ]
 
+  const ICON_FOR = { remove_tourniquet:'tourniquet', remove_splint:'splint', chest_seal:'chestseal', remove_chest_seal:'chestseal', unpack_bandage:'bandage' }
   $('treat-btns').innerHTML = treats.map(t => {
-    const cnt = t.noInv ? null : (inv[t.id]||0)
+    const cnt = t.noInv ? null : (inv[TREAT_INV_KEY[t.id]||t.id]||0)
     const blocked = (!t.noInv && cnt<=0)||(t.locked===true)||(!!S.applying && S.applying.treatment!==t.id)
     const isActive = S.applying?.treatment===t.id
     // Deliberately NOT using the native `disabled` attribute here — a
@@ -3566,13 +3657,13 @@ window.openTreat = (zone, target='self') => {
     // still refuses to start and now explains why via blockTreatment().
     return `<button class="treat-btn" onclick="startApply('${zone}','${t.id}','${target}')"
       style="border-color:${blocked?'rgba(91,139,181,.22)':t.color};background:${isActive?t.color+'20':blocked?'transparent':t.color+'08'};color:${blocked?'var(--accent)':t.color}">
-      ${svgItemIcon(t.id==='remove_tourniquet'?'tourniquet':t.id==='remove_splint'?'splint':t.id,18,t.color)}
+      ${t.id==='find_frag'||t.id==='remove_frag' ? svgFrag(18) : svgItemIcon(ICON_FOR[t.id]||t.id,18,t.color)}
       <div class="orb" style="font-size:10px;font-weight:700;margin-top:6px;letter-spacing:.05em">${t.label}</div>
       <div style="font-size:10px;margin-top:4px;display:flex;gap:5px;align-items:center">
         <span style="color:${t.color}">${t.timeSec}s</span>
         ${t.noInv ? '' : `<span style="color:var(--accent)">·</span><span style="color:${cnt>0?'#a8b8cc':'var(--red)'}">×${cnt}</span>`}
       </div>
-      ${t.id==='stim' ? `<div style="font-size:9px;margin-top:3px;color:var(--red);min-height:12px">${t.desc}</div>` : ''}
+      ${t.id==='stim'||t.desc?.startsWith('❌')||t.desc?.startsWith('⚠') ? `<div style="font-size:9px;margin-top:3px;color:var(--red);min-height:12px">${t.desc}</div>` : ''}
     </button>`
   }).join('')
 
@@ -3610,24 +3701,43 @@ function blockTreatment(msg) {
   if(el) el.innerHTML = `<div style="font-size:12px;color:var(--red);font-weight:700">⚠ ${msg}</div>` + el.innerHTML
 }
 
+// Treatments that don't cost inventory — see NO_INV_TREATMENTS in
+// js/medical.js, kept in sync manually since the UI layer decides what to
+// even attempt before the module ever sees it.
+const NO_INV_UI = new Set(['remove_tourniquet','remove_splint','remove_chest_seal','unpack_bandage','find_frag','remove_frag'])
+// Treatment id -> inventory key, for the one that doesn't share a name —
+// kept in sync with INV_KEY in js/medical.js (the actual spend happens there).
+const TREAT_INV_KEY = { chest_seal: 'chestseal' }
+
 window.startApply = (zone, treatment, target) => {
   if(S.applying) { blockTreatment('Already treating — wait for it to finish or cancel it') ; return }
   if(treatment==='tourniquet'&&!LIMBS.includes(zone)) { blockTreatment('Tourniquets only go on limbs') ; return }
-  if(treatment!=='remove_tourniquet' && treatment!=='remove_splint' && (S.self.inv[treatment]||0)<=0) { blockTreatment('OUT OF SUPPLY — you have none of this left') ; return }
+  if(treatment==='chest_seal'&&zone!=='torso') { blockTreatment('Chest seals only go on the torso') ; return }
+  if(!NO_INV_UI.has(treatment) && (S.self.inv[TREAT_INV_KEY[treatment]||treatment]||0)<=0) { blockTreatment('OUT OF SUPPLY — you have none of this left') ; return }
   const targetDead = target==='patient' ? S.patients.find(p=>p.id===S.openPatientId)?.dead : S.self.dead
   if(targetDead) { blockTreatment('Deceased — no treatment applies') ; return }
 
   const patient = target==='patient'
     ? S.patients.find(p=>p.id===S.openPatientId)
     : { zones:S.self.zones, inj:S.self.zones[zone]?.inj }
-  // One TQ per limb — this shouldn't be reachable via the UI (the button
-  // switches to REMOVE TQ once a zone is tourniqueted) but guard it directly
+  const zs = patient?.zones?.[zone]
+  // One TQ per limb / one seal per torso — this shouldn't be reachable via
+  // the UI (the button swaps to REMOVE once applied) but guard it directly
   // too, in case a stale render or a race ever leaves the old button live.
-  if(treatment==='tourniquet' && patient?.zones?.[zone]?.tq) { blockTreatment('Already has a tourniquet on') ; return }
-  if(treatment==='splint' && !patient?.zones?.[zone]?.fracture) { blockTreatment('No fracture on this zone — nothing to splint') ; return }
-  const frag = patient?.zones?.[zone]?.frag
+  if(treatment==='tourniquet' && zs?.tq) { blockTreatment('Already has a tourniquet on') ; return }
+  if(treatment==='chest_seal' && zs?.chestSeal) { blockTreatment('Already has a chest seal on') ; return }
+  if(treatment==='splint' && !zs?.fracture) { blockTreatment('No fracture on this zone — nothing to splint') ; return }
+  if(treatment==='unpack_bandage' && !(zs?.bandagesApplied>0)) { blockTreatment('No bandages on this zone to unpack') ; return }
+  const woundExposed = (zs?.bandagesApplied||0)===0 && !zs?.chestSeal
+  if((treatment==='find_frag'||treatment==='remove_frag') && !woundExposed) {
+    blockTreatment(zs?.chestSeal ? 'Remove the chest seal first — wound must be open' : 'Unpack the wound first — it must be fully open') ; return
+  }
+  if(treatment==='find_frag' && (!zs?.frag || zs?.fragFound)) { blockTreatment('Nothing to search for here') ; return }
+  if(treatment==='remove_frag' && !zs?.fragFound) { blockTreatment('Find it first') ; return }
+  const frag = zs?.frag
   let dur = APPLY_MS[treatment]||3000
   if(treatment==='bandage') dur = frag ? APPLY_MS.bandage_frag : APPLY_MS.bandage_bleed
+  if(treatment==='find_frag') dur = Medical.randFindFragMs()
 
   S.applying = { zone, treatment, target, patientId:S.openPatientId, duration:dur, startedAt:Date.now() }
   $('treat-prog-wrap').style.display='block'
@@ -3725,6 +3835,7 @@ function renderInventory() {
   const items = [
     {id:'bandage',    label:'BANDAGE',    ico:svgItemIcon('bandage',20,'#4ade80'), color:'#4ade80', desc:'5s · 15s frag'},
     {id:'tourniquet', label:'TOURNIQUET', ico:svgTQ(20),                           color:'#fbbf24', desc:'3s · no head'},
+    {id:'chestseal',  label:'CHEST SEAL', ico:svgChestSeal(20),                    color:'#fb923c', desc:'4s · torso only'},
     {id:'splint',     label:'SPLINT',     ico:svgFracture(20),                     color:'#a78bfa', desc:'6s · fixes fracture'},
     {id:'stim',       label:'STIM',       ico:svgStim(20),                         color:'#a78bfa', desc:'3s · ⚠ OD'},
     {id:'depressant', label:'DEPRESSANT', ico:svgDep(20),                          color:'#60a5fa', desc:'3s · slows HR'},
@@ -4675,7 +4786,7 @@ async function restoreJointOp(joId) {
 // ════════════════════════════════════════════════════════════════════════════
 // ADMIN PANEL
 // ════════════════════════════════════════════════════════════════════════════
-const TREAT_LABEL = {bandage:'bandaged',tourniquet:'applied a tourniquet to',remove_tourniquet:'removed a tourniquet from',splint:'splinted',remove_splint:'removed a splint from',stim:'gave a stim to',depressant:'gave a depressant to',blood:'gave a blood pack to'}
+const TREAT_LABEL = {bandage:'bandaged',unpack_bandage:'unpacked a bandage from',tourniquet:'applied a tourniquet to',remove_tourniquet:'removed a tourniquet from',chest_seal:'applied a chest seal to',remove_chest_seal:'removed a chest seal from',splint:'splinted',remove_splint:'removed a splint from',find_frag:'searched for fragmentation on',remove_frag:'removed fragmentation from',stim:'gave a stim to',depressant:'gave a depressant to',blood:'gave a blood pack to'}
 function describeEvent(e) {
   switch(e.type) {
     case 'casualty':  return `${e.actorName} went down (${e.cause==='headshot'?'headshot':'wounded'})`

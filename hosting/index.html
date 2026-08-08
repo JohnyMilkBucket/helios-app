@@ -313,7 +313,7 @@ window.doJoinCard = async () => {
         username:S.profile.username||'UNKNOWN OPERATIVE', uid:S.user.uid, role:'OPERATOR', color:'#a8b8cc',
         isAdmin:false, canTreatOthers:false, canCreateOps:false, canEditBrevity:false,
         canMultiChan:false, online:true, joinedAt:serverTimestamp(),
-        ld:{bandage:0,tourniquet:0,splint:0,stim:0,depressant:0,blood:0}
+        ld:{bandage:0,tourniquet:0,chestseal:0,splint:0,stim:0,depressant:0,blood:0}
       })
     }
     const cardIds = [...new Set([...(S.profile.cardIds||[]), cardId])]
@@ -545,10 +545,12 @@ function zoneStatus(zs) {
   if(!zs) return {text:'CLEAR', color:'#a8b8cc'}
   if(zs.limbLost) return {text:'LIMB LOST', color:'#94a3b8'}
   if(zs.tq) return {text: zs.tqNumb?'TQ — NUMB':'TQ ON', color:'var(--amber)'}
+  if(zs.chestSeal) return {text: zs.chestSealFailing?'SEAL FAILING':'SEAL ON', color:'#fb923c'}
   if(zs.bleeding) return {text:'BLEEDING', color:'var(--red)'}
   if(zs.fracture) return {text:'FRACTURED', color:'var(--purple)'}
   if(zs.splinted) return {text:'(<s>FRACTURE</s>) SPLINT', color:'var(--purple)'}
-  if(zs.bandaged) return {text:'BANDAGED', color:'var(--green)'}
+  // Bleeding stopped/packed — no longer urgent (red), reads as controlled.
+  if(zs.bandaged) return {text:`BANDAGED${zs.bandagesApplied>1?' x'+zs.bandagesApplied:''}`, color:'var(--amber)'}
   return {text:'CLEAR', color:'#a8b8cc'}
 }
 function renderMedicalView() {
@@ -580,7 +582,7 @@ function renderMedicalView() {
     </div>
     <div class="panel">
       <div class="label">SUPPLIES</div>
-      <div>${['bandage','tourniquet','splint','stim','depressant','blood'].map(k=>`<span class="inv-chip">${k.toUpperCase()}: ${inv[k]||0}</span>`).join('')}</div>
+      <div>${['bandage','tourniquet','chestseal','splint','stim','depressant','blood'].map(k=>`<span class="inv-chip">${k.toUpperCase()}: ${inv[k]||0}</span>`).join('')}</div>
     </div>
     ${canTreatOthers ? `
     <div class="panel">
@@ -659,11 +661,18 @@ function closeExistingSheetOnly() { $('treat-sheet')?.remove() }
 function renderZoneTreatRow(zone, zs, inv) {
   const st = zoneStatus(zs)
   const actions = []
-  if(zs?.bleeding) actions.push(`<button class="btn" ${!inv.bandage?'disabled':''} onclick="doTreat('${zone}','bandage')" style="font-size:9px;padding:7px 8px">BANDAGE</button>`)
-  if(Medical.LIMBS.includes(zone) && zs?.bleeding && !zs.tq) actions.push(`<button class="btn btn-amber" ${!inv.tourniquet?'disabled':''} onclick="doTreat('${zone}','tourniquet')" style="font-size:9px;padding:7px 8px">TQ</button>`)
+  const bandagesApplied = zs?.bandagesApplied||0
+  const woundExposed = bandagesApplied===0 && !zs?.chestSeal
+  if(zs?.inj && !zs.bandaged) actions.push(`<button class="btn" ${!inv.bandage?'disabled':''} onclick="doTreat('${zone}','bandage')" style="font-size:9px;padding:7px 8px">BANDAGE</button>`)
+  if(bandagesApplied>0) actions.push(`<button class="btn" onclick="doTreat('${zone}','unpack_bandage')" style="font-size:9px;padding:7px 8px">UNPACK (${bandagesApplied})</button>`)
+  if(Medical.LIMBS.includes(zone) && !zs?.tq && !zs?.limbLost) actions.push(`<button class="btn btn-amber" ${!inv.tourniquet?'disabled':''} onclick="doTreat('${zone}','tourniquet')" style="font-size:9px;padding:7px 8px">TQ</button>`)
   if(zs?.tq && !zs.limbLost) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_tourniquet')" style="font-size:9px;padding:7px 8px">REMOVE TQ</button>`)
+  if(zone==='torso' && !zs?.chestSeal) actions.push(`<button class="btn" ${!inv.chestseal?'disabled':''} onclick="doTreat('${zone}','chest_seal')" style="font-size:9px;padding:7px 8px;background:rgba(251,146,60,.12);border-color:rgba(251,146,60,.45);color:#fb923c">SEAL</button>`)
+  if(zone==='torso' && zs?.chestSeal) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_chest_seal')" style="font-size:9px;padding:7px 8px">REMOVE SEAL</button>`)
   if(zs?.fracture) actions.push(`<button class="btn" ${!inv.splint?'disabled':''} onclick="doTreat('${zone}','splint')" style="font-size:9px;padding:7px 8px">SPLINT</button>`)
   if(zs?.splinted) actions.push(`<button class="btn" onclick="doTreat('${zone}','remove_splint')" style="font-size:9px;padding:7px 8px">REMOVE SPLINT</button>`)
+  if(zs?.frag && !zs.fragFound) actions.push(`<button class="btn" ${!woundExposed?'disabled':''} onclick="doTreat('${zone}','find_frag')" style="font-size:9px;padding:7px 8px" title="${woundExposed?'15-20s search':'Wound must be open first'}">FIND FRAG</button>`)
+  if(zs?.fragFound) actions.push(`<button class="btn" ${!woundExposed?'disabled':''} onclick="doTreat('${zone}','remove_frag')" style="font-size:9px;padding:7px 8px" title="${woundExposed?'':'Wound must be open first'}">REMOVE FRAG</button>`)
   return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[zone]}<br><span style="color:${st.color};font-size:9px">${st.text}</span></span><span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">${actions.join('')||'<span style="font-size:9px;color:var(--accent)">—</span>'}</span></div>`
 }
 
