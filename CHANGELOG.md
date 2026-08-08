@@ -3,6 +3,11 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.24
+- Fixed "BLEEDING CONTROLLED" (and the bleed icon) showing on a zone that
+  was bandaged but never actually had a real injury — it now reads "Was
+  that bandage just for decoration?" instead.
+
 ## v1.4.23
 - Body map figure reshaped: removed the neck block, torso and legs are
   wider, legs are shorter. Same zones/click targets, tourniquet/chest-seal

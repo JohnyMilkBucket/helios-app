@@ -1406,6 +1406,9 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.24', items:[
+    'Fixed "BLEEDING CONTROLLED" showing on a bandaged zone that was never actually injured — now says "Was that bandage just for decoration?"',
+  ]},
   { v:'1.4.23', items:[
     'Body map reshaped: neck removed, torso and legs wider, legs shorter.',
   ]},
@@ -3564,13 +3567,14 @@ window.openTreat = (zone, target='self') => {
   } else if(s?.limbLost) {
     st = `<div style="font-size:12px;color:#6b7280;font-weight:700">✕ LIMB LOST — tourniquet was left on too long</div>`
   } else if(s) {
-    st += `<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgBleed(13,false)}<span style="color:${injInfo?.color||'#8db3d4'};font-weight:700">${s.inj}</span><span style="color:#a8b8cc">· ${injInfo?.name||''}</span></div>`
+    if(s.inj) st += `<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgBleed(13,false)}<span style="color:${injInfo?.color||'#8db3d4'};font-weight:700">${s.inj}</span><span style="color:#a8b8cc">· ${injInfo?.name||''}</span></div>`
     if(s.frag && !s.fragFound) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">+ ${FRAG_INFO.name.toUpperCase()}</span></div>`
     if(s.fragFound) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">FRAGMENT LOCATED — READY TO REMOVE</span></div>`
     if(s.tq)             st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgTQ(13)}<span style="color:var(--amber);font-weight:700">TOURNIQUET APPLIED</span></div>`
     else if(s.chestSeal) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgChestSeal(13)}<span style="color:#fb923c;font-weight:700">CHEST SEAL APPLIED</span></div>`
     else if(s.bleeding)  st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgBleed(13,false)}<span style="color:var(--red);font-weight:700">ACTIVE BLEEDING</span></div>`
-    else st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING CONTROLLED</div>`
+    else if(s.inj) st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING CONTROLLED</div>`
+    else st+=`<div style="font-size:12px;color:#a8b8cc">● Was that bandage just for decoration?</div>`
     if(s.tq && s.tqAppliedAt) {
       const tqMs = Date.now()-s.tqAppliedAt
       if(s.tqNumb) st+=`<div style="font-size:11px;color:var(--red);margin-top:4px;font-weight:700">⚠ LIMB NUMB — UNUSABLE WHILE TQ IS ON</div>`
