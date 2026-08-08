@@ -650,6 +650,9 @@ html.popout-mode #content{padding:10px 12px}
                 <button id="down-btn" onclick="toggleDown()" style="width:100%;margin-top:12px;padding:11px;border:2px solid var(--red);background:rgba(239,68,68,.04);color:var(--red);font-size:10px;letter-spacing:.28em;font-weight:700;cursor:pointer;font-family:'Orbitron',sans-serif;-webkit-app-region:no-drag">
                   ◉ MARK DOWNED
                 </button>
+                <button id="give-up-btn" onclick="giveUp()" style="display:none;width:100%;margin-top:8px;padding:9px;border:1px solid rgba(107,114,128,.5);background:rgba(107,114,128,.06);color:#9ca3af;font-size:9px;letter-spacing:.24em;font-weight:700;cursor:pointer;font-family:'Orbitron',sans-serif;-webkit-app-region:no-drag">
+                  ☠ GIVE UP
+                </button>
               </div>
 
               <!-- Right: inventory -->
@@ -1409,6 +1412,11 @@ const DEFAULT_BREVITY = [] // blank slate — admins add their own
 // Settings. Kept short (recent versions only) — full history lives in
 // CHANGELOG.md in the repo.
 const CHANGELOG = [
+  { v:'1.4.29', items:[
+    'Fixed the healing countdown getting stuck at "0s" forever if the bandaged player\'s own app wasn\'t active — any connected client can finish it now.',
+    'Status text now says "BLEEDING STOPPED" once a wound is permanently fixed, not the same "BLEEDING CONTROLLED" as while it\'s still healing.',
+    'New: GIVE UP — accept death outright while down, without waiting on a medic. Leaves wounds as they are, same as every other death.',
+  ]},
   { v:'1.4.28', items:[
     'Reworked bandaging: packing a wound now pauses bleeding right away and permanently fixes it after enough total bandaged time (1:00/2:30/5:00) — pulling it off resumes bleeding and pauses the clock, reapplying resumes instead of restarting.',
     'Blood now slowly regenerates (+1%/3s) whenever nothing is actively bleeding.',
@@ -3281,6 +3289,8 @@ function updateDownBtn() {
       btn.style.background = 'rgba(239,68,68,.04)'
     }
   }
+  const giveUpBtn = $('give-up-btn')
+  if(giveUpBtn) giveUpBtn.style.display = (S.self.down && !S.self.dead) ? 'block' : 'none'
   const cs = $('consciousness-status')
   if(cs) {
     if(S.self.dead)          { cs.textContent='☠ DECEASED';    cs.style.color='#6b7280' }
@@ -3312,6 +3322,20 @@ window.toggleDown = async () => {
   }
 }
 
+// Accept death outright instead of waiting on/fighting for a medic — see
+// Medical.giveUp() for why this deliberately leaves wounds intact (same
+// as every other death path; only revive() ever clears them).
+window.giveUp = () => {
+  if(!S.self.down || S.self.dead) return
+  confirmInlineModal('Give Up?', 'You\'ll be marked deceased. Your wounds stay as they are — only a revive clears them.', true, async () => {
+    await Medical.giveUp()
+    sfx('alert')
+    Comms.silenceAllRadios()
+    updateDownBtn()
+    updateBodyFigure(); renderInventory()
+  })
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // MEDICAL — BODY FIGURE
 // ════════════════════════════════════════════════════════════════════════════
@@ -3325,12 +3349,12 @@ function zoneColors(zones, z) {
   if(s.chestSeal) return {fill:'rgba(251,146,60,0.22)',stroke:'#fb923c'}
   if(s.bleeding)  return {fill:'rgba(220,38,38,0.28)', stroke:'#dc2626'}
   if(s.fracture)  return {fill:'rgba(167,139,250,0.22)',stroke:'#a78bfa'}
-  // Bleeding stopped/packed — the wound isn't gone, but it's under
-  // control now, so it no longer needs to read as urgent (red).
-  if(s.bandaged)  return {fill:'rgba(250,204,21,0.22)', stroke:'#facc15'}
-  // Fully healed (bleed-stop clock finished) — shown even once the
-  // bandage itself comes back off, since it genuinely can't reopen.
+  // Fully healed (bleed-stop clock finished) — checked ahead of `bandaged`
+  // on purpose, so it reads as done the moment it actually is, not only
+  // after the bandage material happens to come back off too.
   if(s.bleedFixed) return {fill:'rgba(74,222,128,0.15)',stroke:'#4ade80'}
+  // Bleeding stopped/packed but still mid-heal — under control, not gone.
+  if(s.bandaged)  return {fill:'rgba(250,204,21,0.22)', stroke:'#facc15'}
   if(s.splinted)  return {fill:'rgba(167,139,250,0.1)',stroke:'#a78bfa88'}
   const c = INJ[s.inj]?.color||'#8db3d4'
   return {fill:c+'18',stroke:c}
@@ -3602,7 +3626,7 @@ window.openTreat = (zone, target='self') => {
   // Status
   let st = ''
   if(patient.dead) {
-    const causeLabel = { headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST', chest_seal_failure:'CHEST SEAL FAILURE' }[patient.deathCause] || 'DECEASED'
+    const causeLabel = { headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST', chest_seal_failure:'CHEST SEAL FAILURE', gave_up:'GAVE UP' }[patient.deathCause] || 'DECEASED'
     st = `<div style="font-size:12px;color:#9ca3af;font-weight:700">☠ DECEASED — ${causeLabel}</div>`
   } else if(s?.limbLost) {
     st = `<div style="font-size:12px;color:#6b7280;font-weight:700">✕ LIMB LOST — tourniquet was left on too long</div>`
@@ -3610,9 +3634,18 @@ window.openTreat = (zone, target='self') => {
     if(s.inj) st += `<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgBleed(13,false)}<span style="color:${injInfo?.color||'#8db3d4'};font-weight:700">${s.inj}</span><span style="color:#a8b8cc">· ${injInfo?.name||''}</span></div>`
     if(s.frag && !s.fragFound) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">+ ${FRAG_INFO.name.toUpperCase()}</span></div>`
     if(s.fragFound) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px;margin-bottom:4px">${svgFrag(13)}<span style="color:${FRAG_INFO.color};font-weight:700">FRAGMENT LOCATED — READY TO REMOVE</span></div>`
+    // Once time-to-heal computes as spent, read it as stopped right away
+    // (BLEEDING STOPPED) rather than "BLEEDING CONTROLLED" — that's still
+    // healing, this is done — even a beat before the server-side fallback
+    // ticker actually commits bleedFixed (avoids a confusing "stuck at 0s"
+    // read while that catches up).
+    const bleedTotal = BLEED_STOP_MS[INJ[s.inj]?.tier]||BLEED_STOP_MS[1]
+    const bleedRemaining = s.bandagedSince ? Math.max(0, bleedTotal - ((s.bleedProgressMs||0)+(Date.now()-s.bandagedSince))) : (s.bleedFixed?0:null)
     if(s.tq)             st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgTQ(13)}<span style="color:var(--amber);font-weight:700">TOURNIQUET APPLIED</span></div>`
     else if(s.chestSeal) st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgChestSeal(13)}<span style="color:#fb923c;font-weight:700">CHEST SEAL APPLIED</span></div>`
     else if(s.bleeding)  st+=`<div style="display:flex;align-items:center;gap:7px;font-size:12px">${svgBleed(13,false)}<span style="color:var(--red);font-weight:700">ACTIVE BLEEDING</span></div>`
+    else if(s.bleedFixed || (s.bandaged && bleedRemaining!==null && bleedRemaining<=0)) st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING STOPPED</div>`
+    else if(s.bandaged && s.inj) st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING CONTROLLED</div>`
     else if(s.inj) st+=`<div style="font-size:12px;color:var(--green)">● BLEEDING CONTROLLED</div>`
     else st+=`<div style="font-size:12px;color:#a8b8cc">● Was that bandage just for decoration?</div>`
     if(s.tq && s.tqAppliedAt) {
@@ -3627,12 +3660,10 @@ window.openTreat = (zone, target='self') => {
     }
     if((s.bandagesApplied||0)>0) st+=`<div style="font-size:11px;color:#a8b8cc;margin-top:4px">${s.bandagesApplied} bandage${s.bandagesApplied===1?'':'s'} on this wound${s.bandaged?' — fully packed':''}</div>`
     if(!s.bandaged && (s.bandagesApplied||0)>0 && s.bleeding) st+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">Wound partially packed — keep bandaging</div>`
-    if(s.bandaged && !s.bleedFixed && s.bandagedSince) {
-      const total = BLEED_STOP_MS[INJ[s.inj]?.tier]||BLEED_STOP_MS[1]
-      const remaining = Math.max(0, total - ((s.bleedProgressMs||0)+(Date.now()-s.bandagedSince)))
-      const mins = Math.floor(remaining/60000), secs = Math.ceil((remaining%60000)/1000)
+    if(s.bandaged && bleedRemaining>0) {
+      const mins = Math.floor(bleedRemaining/60000), secs = Math.ceil((bleedRemaining%60000)/1000)
       st+=`<div style="font-size:11px;color:var(--amber);margin-top:4px">Healing — ${mins>0?mins+'m ':''}${secs}s until fully closed (keep the bandage on)</div>`
-    } else if(s.bleedFixed) {
+    } else if(s.bleedFixed || (s.bandaged && bleedRemaining===0)) {
       st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">✓ Wound fully closed — won't reopen</div>`
     }
     if(s.bandaged && s.tq) st+=`<div style="font-size:11px;color:var(--green);margin-top:4px">Wound packed — safe to remove TQ</div>`
@@ -4866,6 +4897,7 @@ function describeEvent(e) {
   switch(e.type) {
     case 'casualty':  return `${e.actorName} went down (${e.cause==='headshot'?'headshot':'wounded'})`
     case 'revive':    return `${e.actorName} was revived`
+    case 'gave_up':   return `${e.actorName} gave up`
     case 'treatment': {
       const self = e.actorUid===e.targetUid
       const verb = TREAT_LABEL[e.treatment]||e.treatment

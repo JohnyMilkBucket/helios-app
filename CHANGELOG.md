@@ -3,6 +3,22 @@
 All notable changes to Helios are documented here. Versions correspond to
 GitHub releases.
 
+## v1.4.29
+- Fixed the v1.4.28 healing countdown getting stuck at "0s" forever
+  without ever actually finishing. Root cause: resolving a finished
+  bleed-stop clock only ever ran on the bandaged player's own client —
+  if their app wasn't actively open at the right moment (minimized,
+  backgrounded, unconscious and not looking at the screen), nobody ever
+  committed the "fully healed" flag. Any connected client can now finish
+  it for them as a fallback, and the status text reads as done the
+  instant the countdown's actually up instead of waiting on that write.
+- Status text now distinguishes "BLEEDING CONTROLLED" (still healing,
+  bandage needs to stay on) from "BLEEDING STOPPED" (permanently fixed)
+  instead of using the same label for both — desktop and mobile.
+- New: GIVE UP — a downed player can accept death outright instead of
+  waiting on/fighting for a medic. Leaves wounds exactly as they are
+  (same as every other death path); only a revive clears them.
+
 ## v1.4.28
 - Reworked how bandaging actually resolves a wound — this was designed
   wrong in v1.4.25/26. Packing a wound now pauses bleeding immediately

@@ -207,7 +207,7 @@ const db = getFirestore(app)
 const $ = id => document.getElementById(id)
 const ZONES = Medical.ZONES
 const ZONE_LABEL = {head:'HEAD',torso:'TORSO',l_arm:'L.ARM',r_arm:'R.ARM',l_leg:'L.LEG',r_leg:'R.LEG'}
-const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST', chest_seal_failure:'CHEST SEAL FAILURE'}
+const DEATH_LABEL = {headshot:'HEAD TRAUMA', bleed_out:'BLED OUT', cardiac_arrest:'CARDIAC ARREST', chest_seal_failure:'CHEST SEAL FAILURE', gave_up:'GAVE UP'}
 
 const S = { user:null, profile:null, cardId:null, card:null, member:null, members:[], ops:[], events:[], roles:[], units:[], self:Medical.getSelf(), patients:[], listeners:[], jointOp:null, jointOpParticipants:[], jointOpCasualties:[] }
 
@@ -553,9 +553,11 @@ function zoneStatus(zs) {
   if(zs.bleeding) return {text:'BLEEDING', color:'var(--red)'}
   if(zs.fracture) return {text:'FRACTURED', color:'var(--purple)'}
   if(zs.splinted) return {text:'(<s>FRACTURE</s>) SPLINT', color:'var(--purple)'}
-  // Bleeding stopped/packed — no longer urgent (red), reads as controlled.
-  if(zs.bandaged) return {text:`BANDAGED${zs.bandagesApplied>1?' x'+zs.bandagesApplied:''}`, color:'var(--amber)'}
-  if(zs.bleedFixed) return {text:'HEALED', color:'var(--green)'}
+  // Fully healed — checked ahead of `bandaged` so it reads as done the
+  // moment it actually is, not only once the bandage material comes off.
+  if(zs.bleedFixed) return {text:'BLEEDING STOPPED', color:'var(--green)'}
+  // Bleeding paused/packed but still mid-heal — under control, not gone.
+  if(zs.bandaged) return {text:`BLEEDING CONTROLLED${zs.bandagesApplied>1?' x'+zs.bandagesApplied:''}`, color:'var(--amber)'}
   return {text:'CLEAR', color:'#a8b8cc'}
 }
 function renderMedicalView() {
@@ -581,7 +583,8 @@ function renderMedicalView() {
                return `<div class="zone-row"><span class="zone-name">${ZONE_LABEL[z]}</span><span class="zone-status" style="color:${st.color}">${st.text}</span></div>`
              }).join('')}</div>
              <button class="btn btn-blue" style="width:100%;margin-top:10px" onclick="openTreatSheet('self')">TREAT MYSELF</button>
-             <button class="btn btn-green" style="width:100%;margin-top:8px" onclick="doRevive()">REVIVE</button>`
+             <button class="btn btn-green" style="width:100%;margin-top:8px" onclick="doRevive()">REVIVE</button>
+             <button class="btn" style="width:100%;margin-top:8px;border-color:rgba(107,114,128,.5);color:#9ca3af" onclick="doGiveUp()">☠ GIVE UP</button>`
           : `<div style="font-size:11px;color:var(--green)">HEALTHY</div>
              <button class="btn btn-red" style="width:100%;margin-top:10px" onclick="doMarkDown()">MARK MYSELF DOWN</button>`
       }
@@ -607,6 +610,11 @@ window.doMarkDown = async () => {
 }
 window.doRevive = async () => {
   await Medical.revive()
+  renderMedicalView()
+}
+window.doGiveUp = async () => {
+  if(!confirm('Give up? You\'ll be marked deceased. Your wounds stay as they are — only a revive clears them.')) return
+  await Medical.giveUp()
   renderMedicalView()
 }
 

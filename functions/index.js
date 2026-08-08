@@ -110,7 +110,7 @@ exports.renewCardLicense = onCall(async (request) => {
   return { licenseExpiresAt }
 })
 
-const DEATH_LABEL = { headshot: 'HEAD TRAUMA', bleed_out: 'BLED OUT', cardiac_arrest: 'CARDIAC ARREST', chest_seal_failure: 'CHEST SEAL FAILURE' }
+const DEATH_LABEL = { headshot: 'HEAD TRAUMA', bleed_out: 'BLED OUT', cardiac_arrest: 'CARDIAC ARREST', chest_seal_failure: 'CHEST SEAL FAILURE', gave_up: 'GAVE UP' }
 
 // Sends to every token on a member doc, then prunes any token FCM reports
 // as no-longer-registered (uninstalled app, revoked permission, etc) so

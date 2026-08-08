@@ -385,6 +385,21 @@ export async function revive() {
   logEvent('revive', { targetUid:M.uid, targetName:M.actorName })
 }
 
+// See renderer/js/medical.js — deliberately doesn't clear zone data, same
+// as every other death path.
+export async function giveUp() {
+  if(!M.self.down || M.self.dead) return
+  M.self.dead = true
+  M.self.deathCause = 'gave_up'
+  M.self.uncon = true
+  M.self.hr = 0
+  M.self.hrTarget = null
+  await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{
+    dead:true, deathCause:'gave_up', uncon:true, hr:0, hrTarget:null, updatedAt:serverTimestamp()
+  },{merge:true})
+  logEvent('gave_up', { targetUid:M.uid, targetName:M.actorName })
+}
+
 export async function clearPatient(patientId) {
   await deleteDoc(doc(M.db,'medical',M.cardId,'patients',patientId))
 }
@@ -672,4 +687,46 @@ export function startMedicalTickers(hooks) {
       await setDoc(doc(M.db,'medical',M.cardId,'patients',M.uid),{hr:M.self.hr,hrTarget:M.self.hrTarget,updatedAt:serverTimestamp()},{merge:true})
     }
   }, 1000)
+
+  // See renderer/js/medical.js — fallback for the bleed-stop clock above,
+  // which only resolves M.self's own zones (depends on the bandaged
+  // player's own client actively ticking). Runs on every connected
+  // client (M.patients is populated for everyone, medic or not) so a
+  // patient whose app isn't actively open still gets resolved by whoever
+  // else happens to have the app open.
+  setInterval(async () => {
+    if(!M.cardId) return
+    for(const p of M.patients) {
+      if(p.dead) continue
+      const pending = ZONES.some(z => {
+        const s = p.zones?.[z]
+        return s?.bandaged && s.bandagedSince && !s.bleedFixed
+      })
+      if(!pending) continue
+      const ref = doc(M.db,'medical',M.cardId,'patients',p.id)
+      try {
+        await runTransaction(M.db, async (tx) => {
+          const snap = await tx.get(ref)
+          if(!snap.exists()) return
+          const data = snap.data()
+          const patch = {}
+          let changed = false
+          for(const z of ZONES) {
+            const s = data.zones?.[z]
+            if(!s?.bandaged || !s.bandagedSince || s.bleedFixed) continue
+            const tier = INJ[s.inj]?.tier
+            const total = BLEED_STOP_MS[tier]||BLEED_STOP_MS[1]
+            const progress = (s.bleedProgressMs||0) + (Date.now()-s.bandagedSince)
+            if(progress >= total) {
+              patch[`zones.${z}.bleedFixed`] = true
+              patch[`zones.${z}.bleedProgressMs`] = total
+              patch[`zones.${z}.bandagedSince`] = null
+              changed = true
+            }
+          }
+          if(changed) tx.update(ref, {...patch, updatedAt:serverTimestamp()})
+        })
+      } catch(e) { /* another client may already be resolving this one */ }
+    }
+  }, 5000)
 }
