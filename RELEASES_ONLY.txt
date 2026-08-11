@@ -1,0 +1,1 @@
+Official compiled Helios desktop releases and automatic-update files only. Source code is maintained privately.
